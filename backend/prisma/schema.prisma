@@ -1,0 +1,128 @@
+// schema.prisma
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL") // "sqlserver://user:password@localhost:1433;database=ServicioTecnicoDB;trustServerCertificate=true"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Role {
+  RoleId      Int      @id @default(autoincrement()) @map("RoleId")
+  Name        String   @unique @map("Name")
+  Description String?  @map("Description")
+
+  userRoles   UserRole[]
+  
+  @@map("security.Roles")
+}
+
+model User {
+  UserId       Int       @id @default(autoincrement()) @map("UserId")
+  Username     String    @unique @map("Username")
+  PasswordHash Bytes     @map("PasswordHash")
+  Email        String?   @map("Email")
+  Phone        String?   @map("Phone")
+  Active       Boolean   @default(true) @map("Active")
+  CreatedAt    DateTime  @default(now()) @map("CreatedAt")
+
+  userRoles    UserRole[]
+  serviceOrders ServiceOrder[] @relation("ReceptionistOrders")
+
+  @@map("security.Users")
+}
+
+model UserRole {
+  UserId Int @map("UserId")
+  RoleId Int @map("RoleId")
+
+  user User @relation(fields: [UserId], references: [UserId])
+  role Role @relation(fields: [RoleId], references: [RoleId])
+
+  @@id([UserId, RoleId])
+  @@map("security.UserRoles")
+}
+
+model ClientType {
+  ClientTypeId Int     @id @default(autoincrement()) @map("ClientTypeId")
+  Code         String  @unique @map("Code")
+  Name         String  @map("Name")
+
+  clients      Client[]
+  
+  @@map("core.ClientTypes")
+}
+
+model Client {
+  ClientId     Int      @id @default(autoincrement()) @map("ClientId")
+  ClientTypeId Int      @map("ClientTypeId")
+  DisplayName  String   @map("DisplayName")
+  IdNumber     String   @unique @map("IdNumber")
+  Email        String?  @map("Email")
+  Phone        String?  @map("Phone")
+  Address      String?  @map("Address")
+  ContactName  String?  @map("ContactName")
+  CreatedAt    DateTime @default(now()) @map("CreatedAt")
+
+  clientType ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId])
+  equipments Equipment[]
+  serviceOrders ServiceOrder[]
+
+  @@map("core.Clients")
+}
+
+model EquipmentType {
+  EquipmentTypeId Int    @id @default(autoincrement()) @map("EquipmentTypeId")
+  Name            String @unique @map("Name")
+
+  equipments Equipment[]
+
+  @@map("core.EquipmentTypes")
+}
+
+model Equipment {
+  EquipmentId     Int     @id @default(autoincrement()) @map("EquipmentId")
+  ClientId        Int     @map("ClientId")
+  EquipmentTypeId Int     @map("EquipmentTypeId")
+  Brand           String? @map("Brand")
+  Model           String? @map("Model")
+  SerialNumber    String? @map("SerialNumber")
+  Description     String? @map("Description")
+  CreatedAt       DateTime @default(now()) @map("CreatedAt")
+
+  client        Client        @relation(fields: [ClientId], references: [ClientId])
+  equipmentType EquipmentType @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId])
+
+  @@map("core.Equipments")
+}
+
+model Status {
+  StatusId   Int     @id @default(autoincrement()) @map("StatusId")
+  Code       String  @unique @map("Code")
+  Name       String  @map("Name")
+  SortOrder  Int     @map("SortOrder")
+  IsTerminal Boolean @default(false) @map("IsTerminal")
+
+  serviceOrders ServiceOrder[]
+  histories     OrderStatusHistory[]
+
+  @@map("ops.Status")
+}
+
+model ServiceOrder {
+  OrderId        Int      @id @default(autoincrement()) @map("OrderId")
+  ClientId       Int      @map("ClientId")
+  ReceptionistId Int      @map("ReceptionistId")
+  IntakeDate     DateTime @default(now()) @map("IntakeDate")
+  IdentityTag    String   @unique @map("IdentityTag")
+  CurrentStatusId Int     @map("CurrentStatusId")
+  Notes          String?  @map("Notes")
+  EstimatedDeliveryDate DateTime? @map("EstimatedDeliveryDate")
+
+  client Client @relation(fields: [ClientId], references: [ClientId])
+  receptionist User @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId])
+  status Status @relation(fields: [CurrentStatusId], references: [StatusId])
+
+  @@map("ops.ServiceOrders")
+}

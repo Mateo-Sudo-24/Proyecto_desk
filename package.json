@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix renderer\" \"npm start --prefix electron\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "wait-on": "^7.0.0"
+  }
+}
