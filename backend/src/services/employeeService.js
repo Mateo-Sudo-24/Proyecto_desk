@@ -1,10 +1,27 @@
-
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import validator from 'validator';
-import { sendMailToReceptionist } from '../../config/nodemailer.js';
+import { sendMailToReceptionist, sendOTPEmail } from '../../config/nodemailer.js';
 const prisma = new PrismaClient();
+
+// OTP y relación de orden
+export async function generateAndSendOTP(userId, email) {
+  // Generar OTP de 6 dígitos
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  // Guardar OTP y expiración en la base de datos (tabla User, o crea una tabla OTP si prefieres)
+  await prisma.user.update({
+    where: { UserId: userId },
+    data: {
+      OTP: otp,
+      OTPExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
+    }
+  });
+  // Enviar OTP por correo con diseño corporativo
+  await sendOTPEmail(email, otp);
+  return otp;
+}
+
 
 export async function createEmployee(email, roleName) {
   // Validar email
@@ -21,28 +38,9 @@ export async function createEmployee(email, roleName) {
     }
   }
   const password = crypto.randomBytes(8).toString('hex');
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const role = await prisma.role.findUnique({ where: { Name: roleName } });
-  if (!role) throw new Error(`Rol no encontrado: ${roleName}`);
-
-  const user = await prisma.user.create({
-    data: {
-      Username: workId,
-      PasswordHash: Buffer.from(hashedPassword),
-      Email: email,
-      Active: true,
-      userRoles: {
-        create: [{ RoleId: role.RoleId }]
-      }
-    }
-  });
-
-  if (roleName === 'Recepcionista') {
-    await sendMailToReceptionist(email, workId, password);
-  } else {
-    // Aquí podrías enviar correo para otros roles si lo deseas
-  }
+  // Usar createUserWithRole para evitar doble hasheo
+  const { createUserWithRole } = await import('./adminService.js');
+  const user = await createUserWithRole({ email, username: workId, password, roleName });
   return user;
 }
 // El envío de credenciales ahora se realiza con sendMailToReceptionist desde nodemailer.js

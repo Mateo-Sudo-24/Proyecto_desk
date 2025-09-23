@@ -1,7 +1,61 @@
+/**
+ * Envía correo cuando el admin cambia la contraseña de un usuario
+ */
+const sendPasswordChangedByAdmin = async (userMail, workId, newPassword) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: userMail,
+    subject: 'Ecuatechnology - Tu contraseña ha sido restablecida',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Contraseña restablecida por el administrador</h2>
+        <p>Tu contraseña ha sido restablecida por el administrador de IT.</p>
+        <p><b>ID de trabajo:</b> ${workId}<br><b>Nueva contraseña:</b> ${newPassword}</p>
+        <p>Por favor, inicia sesión y cambia tu contraseña lo antes posible.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de cambio de contraseña enviado a:", userMail);
+  } catch (error) {
+    console.error("Error al enviar correo de cambio de contraseña:", error);
+  }
+};
+
+/**
+ * Envía correo de solicitud de restablecimiento de contraseña (forgot password)
+ */
+const sendForgotPasswordRequest = async (adminMail, employeeId, employeeEmail) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: adminMail,
+    subject: 'Ecuatechnology - Solicitud de restablecimiento de contraseña',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Solicitud de restablecimiento de contraseña</h2>
+        <p>Se ha solicitado el restablecimiento de contraseña para el usuario:</p>
+        <p><b>ID de empleado:</b> ${employeeId}<br><b>Email:</b> ${employeeEmail}</p>
+        <p>Por favor, verifique la identidad del usuario antes de proceder.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de solicitud de forgot password enviado a:", adminMail);
+  } catch (error) {
+    console.error("Error al enviar correo de forgot password:", error);
+  }
+};
 
 import nodemailer from "nodemailer";
 import dotenv from 'dotenv';
 dotenv.config();
+
 
 function getTransporter() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER) {
@@ -29,7 +83,9 @@ function getTransporter() {
   }
 }
 
+
 const transporter = getTransporter();
+
 
 const COLORS = {
   primary: '#B2753B',
@@ -50,11 +106,15 @@ const baseStyle = `
   </style>
 `;
 
+
 // --- PLANTILLAS DE CORREO ---
 
+/**
+ * Envía las credenciales de recepcionista con diseño corporativo
+ */
 const sendMailToReceptionist = async (userMail, workId, tempPassword) => {
   const mailOptions = {
-    from: process.env.EMAIL_FROM || '"Soporte Ecuatechnology" <no-reply@ecuatechnology.com>',
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
     to: userMail,
     subject: "Ecuatechnology - Credenciales de Recepcionista",
     html: `
@@ -76,6 +136,39 @@ const sendMailToReceptionist = async (userMail, workId, tempPassword) => {
   }
 };
 
+/**
+ * Envía un correo de OTP con diseño corporativo
+ */
+const sendOTPEmail = async (userMail, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: userMail,
+    subject: 'Ecuatechnology - Código de verificación (OTP)',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Verificación de Seguridad</h2>
+        <p>Para continuar con tu proceso, utiliza el siguiente código de verificación (OTP):</p>
+        <div class="button-container">
+          <span class="button" style="font-size: 2em; letter-spacing: 8px;">${otp}</span>
+        </div>
+        <p>Este código es válido por 10 minutos. Si no solicitaste este código, ignora este mensaje.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo OTP enviado a:", userMail);
+  } catch (error) {
+    console.error("Error al enviar correo OTP:", error);
+  }
+};
+
+
 export {
-  sendMailToReceptionist
+  sendMailToReceptionist,
+  sendOTPEmail,
+  sendPasswordChangedByAdmin,
+  sendForgotPasswordRequest
 };

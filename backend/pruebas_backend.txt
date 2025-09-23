@@ -1,0 +1,99 @@
+# Guía de Pruebas Backend Ecuatechnology Desk
+
+## 1. Instalación de dependencias
+
+1. Abre una terminal en la carpeta `backend` del proyecto.
+2. Ejecuta:
+
+```
+npm install
+```
+
+Esto instalará todas las dependencias necesarias (Express, Prisma, bcrypt, nodemailer, etc).
+
+## 2. Configuración de Prisma y base de datos
+
+1. Asegúrate de tener configurada la variable de entorno `DATABASE_URL` en un archivo `.env` en la carpeta `backend`.
+2. Ejecuta para generar el cliente Prisma:
+
+```
+npx prisma generate
+```
+
+3. Si necesitas aplicar migraciones (solo si hay cambios en el modelo):
+
+```
+npx prisma migrate dev --name init
+```
+
+## 3. Ejecución del servidor
+
+1. Desde la carpeta `backend`, ejecuta:
+
+```
+npm start
+```
+
+El servidor escuchará en el puerto configurado (por defecto 4000).
+
+## 4. Pruebas de endpoints con Postman
+
+### 4.1. Login de empleado
+- **POST** `http://localhost:4000/api/employees/login`
+- Body (JSON):
+```
+{
+  "workId": "USUARIO",
+  "password": "CONTRASEÑA"
+}
+```
+
+### 4.2. Consultar estado de orden (cliente)
+- **GET** `http://localhost:4000/api/client/order/status?orderId=1`
+- O bien:
+- **GET** `http://localhost:4000/api/client/order/status?identityTag=ORD-123456`
+
+### 4.3. Consultar estado de orden (recepcionista)
+- **GET** `http://localhost:4000/api/client/receptionist/order/status?orderId=1`
+- (Requiere autenticación de recepcionista, usar cookie de sesión de login)
+
+### 4.4. Solicitar restablecimiento de contraseña (forgot password)
+- **POST** `http://localhost:4000/api/employees/forgot-password`
+- Body (JSON):
+```
+{
+  "workId": "USUARIO"
+}
+```
+
+### 4.5. Crear usuario (admin)
+- **POST** `http://localhost:4000/api/admin/user/create`
+- Body (JSON):
+```
+{
+  "email": "nuevo@correo.com",
+  "username": "nuevoUser",
+  "password": "claveTemporal",
+  "roleName": "Recepcionista"
+}
+```
+- (Requiere autenticación de admin)
+
+### 4.6. Cambiar contraseña de usuario (admin)
+- **POST** `http://localhost:4000/api/admin/user/set-password`
+- Body (JSON):
+```
+{
+  "userId": 2,
+  "newPassword": "nuevaClave"
+}
+```
+
+## 5. Notas
+- Para endpoints protegidos, primero haz login y usa la cookie de sesión en Postman.
+- Revisa la consola para mensajes de error o confirmación.
+- Si tienes dudas sobre los roles o endpoints, consulta el README o pregunta al equipo.
+
+---
+
+¡Listo para probar!

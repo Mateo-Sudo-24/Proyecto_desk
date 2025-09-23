@@ -8,6 +8,8 @@ import compression from 'compression';
 import csrf from 'csurf';
 
 import employeeRoutes from './src/routes/employeeRoutes.js';
+import adminRoutes from './src/routes/adminRoutes.js';
+import clientRoutes from './src/routes/clientRoutes.js';
 import authRoutes from './auth.js';
 
 const app = express();
@@ -42,8 +44,15 @@ app.use(session({
 // Rutas de autenticación
 app.use('/api/auth', authRoutes);
 
+
 // Rutas de empleados
 app.use('/api/employees', employeeRoutes);
+
+// Rutas de administración (roles, usuarios)
+app.use('/api/admin', adminRoutes);
+
+// Rutas de cliente (consulta de estado de orden)
+app.use('/api/client', clientRoutes);
 
 // Ruta de prueba
 app.get('/api/health', (req, res) => {
