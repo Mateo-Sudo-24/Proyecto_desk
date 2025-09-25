@@ -1,68 +1,14 @@
-/**
- * Envía correo cuando el admin cambia la contraseña de un usuario
- */
-const sendPasswordChangedByAdmin = async (userMail, workId, newPassword) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
-    to: userMail,
-    subject: 'Ecuatechnology - Tu contraseña ha sido restablecida',
-    html: `
-      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
-      <div class="container">
-        <h2>Contraseña restablecida por el administrador</h2>
-        <p>Tu contraseña ha sido restablecida por el administrador de IT.</p>
-        <p><b>ID de trabajo:</b> ${workId}<br><b>Nueva contraseña:</b> ${newPassword}</p>
-        <p>Por favor, inicia sesión y cambia tu contraseña lo antes posible.</p>
-        <hr>
-        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
-      </div></body></html>`
-  };
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log("Correo de cambio de contraseña enviado a:", userMail);
-  } catch (error) {
-    console.error("Error al enviar correo de cambio de contraseña:", error);
-  }
-};
-
-/**
- * Envía correo de solicitud de restablecimiento de contraseña (forgot password)
- */
-const sendForgotPasswordRequest = async (adminMail, employeeId, employeeEmail) => {
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
-    to: adminMail,
-    subject: 'Ecuatechnology - Solicitud de restablecimiento de contraseña',
-    html: `
-      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
-      <div class="container">
-        <h2>Solicitud de restablecimiento de contraseña</h2>
-        <p>Se ha solicitado el restablecimiento de contraseña para el usuario:</p>
-        <p><b>ID de empleado:</b> ${employeeId}<br><b>Email:</b> ${employeeEmail}</p>
-        <p>Por favor, verifique la identidad del usuario antes de proceder.</p>
-        <hr>
-        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
-      </div></body></html>`
-  };
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log("Correo de solicitud de forgot password enviado a:", adminMail);
-  } catch (error) {
-    console.error("Error al enviar correo de forgot password:", error);
-  }
-};
-
+// nodemailer.js
 import nodemailer from "nodemailer";
 import dotenv from 'dotenv';
 dotenv.config();
-
 
 function getTransporter() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER) {
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
+      secure: false, // Use 'true' if your SMTP requires SSL/TLS on port 465, 'false' for STARTTLS on 587
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -72,7 +18,7 @@ function getTransporter() {
     return nodemailer.createTransport({
       host: process.env.ZIMBRA_HOST,
       port: Number(process.env.ZIMBRA_PORT) || 465,
-      secure: true,
+      secure: true, // Zimbra usually uses SSL/TLS on port 465
       auth: {
         user: process.env.ZIMBRA_USER,
         pass: process.env.ZIMBRA_PASS
@@ -83,9 +29,7 @@ function getTransporter() {
   }
 }
 
-
 const transporter = getTransporter();
-
 
 const COLORS = {
   primary: '#B2753B',
@@ -101,6 +45,10 @@ const baseStyle = `
     p { font-size: 16px; line-height: 1.5; }
     .button-container { text-align: center; margin: 30px 0; }
     .button { display: inline-block; background-color: ${COLORS.primary}; color: #ffffff !important; padding: 14px 28px; border-radius: 5px; text-decoration: none; font-weight: bold; }
+    .details-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .details-table th, .details-table td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
+    .details-table th { background-color: #f2f2f2; }
+    .text-center { text-align: center; }
     hr { border: none; border-top: 1px solid #e0e0e0; margin: 30px 0; }
     footer { font-size: 12px; color: #888; text-align: center; }
   </style>
@@ -165,10 +113,137 @@ const sendOTPEmail = async (userMail, otp) => {
   }
 };
 
+/**
+ * Envía correo cuando el admin cambia la contraseña de un usuario
+ */
+const sendPasswordChangedByAdmin = async (userMail, workId, newPassword) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: userMail,
+    subject: 'Ecuatechnology - Tu contraseña ha sido restablecida',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Contraseña restablecida por el administrador</h2>
+        <p>Tu contraseña ha sido restablecida por el administrador de IT.</p>
+        <p><b>ID de trabajo:</b> ${workId}<br><b>Nueva contraseña:</b> ${newPassword}</p>
+        <p>Por favor, inicia sesión y cambia tu contraseña lo antes posible.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de cambio de contraseña enviado a:", userMail);
+  } catch (error) {
+    console.error("Error al enviar correo de cambio de contraseña:", error);
+  }
+};
+
+/**
+ * Envía correo de solicitud de restablecimiento de contraseña (forgot password)
+ */
+const sendForgotPasswordRequest = async (adminMail, employeeId, employeeEmail) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: adminMail,
+    subject: 'Ecuatechnology - Solicitud de restablecimiento de contraseña',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Solicitud de restablecimiento de contraseña</h2>
+        <p>Se ha solicitado el restablecimiento de contraseña para el usuario:</p>
+        <p><b>ID de empleado:</b> ${employeeId}<br><b>Email:</b> ${employeeEmail}</p>
+        <p>Por favor, verifique la identidad del usuario antes de proceder.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de solicitud de forgot password enviado a:", adminMail);
+  } catch (error) {
+    console.error("Error al enviar correo de forgot password:", error);
+  }
+};
+
+/**
+ * Envía el correo de la proforma al cliente para su aprobación.
+ */
+const sendProformaEmail = async (clientMail, clientName, identityTag, parts, totalPrice) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: clientMail,
+    subject: `Ecuatechnology - Proforma de Servicio para Orden ${identityTag}`,
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Estimado/a ${clientName},</h2>
+        <p>Hemos preparado la proforma para su orden de servicio con la etiqueta <b>${identityTag}</b>.</p>
+        <p>A continuación, encontrará los detalles de los repuestos y el costo total estimado:</p>
+        <table class="details-table">
+          <thead>
+            <tr>
+              <th>Descripción de Repuestos/Servicios</th>
+              <th>Precio Total Estimado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${parts || 'No especificado'}</td>
+              <td>$${totalPrice ? totalPrice.toFixed(2) : 'N/A'}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>Para aprobar o rechazar esta proforma, por favor inicie sesión en nuestro portal de clientes o siga las instrucciones provistas por nuestro personal de ventas. Su aprobación es necesaria para que nuestros técnicos puedan proceder con el servicio.</p>
+        <p>Si tiene alguna pregunta, no dude en contactarnos.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de proforma enviado a:", clientMail);
+  } catch (error) {
+    console.error("Error al enviar correo de proforma:", error);
+  }
+};
+
+/**
+ * Envía el correo de confirmación al cliente después de aprobar/rechazar la proforma.
+ */
+const sendProformaConfirmationEmail = async (clientMail, clientName, identityTag, action) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: clientMail,
+    subject: `Ecuatechnology - Confirmación de Proforma para Orden ${identityTag}`,
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Estimado/a ${clientName},</h2>
+        <p>Confirmamos que su proforma para la orden de servicio con la etiqueta <b>${identityTag}</b> ha sido <b>${action === 'approve' ? 'APROBADA' : 'RECHAZADA'}</b>.</p>
+        ${action === 'approve'
+          ? `<p>Nuestros técnicos procederán con el servicio de inmediato. Le notificaremos cuando su equipo esté listo para ser recogido o entregado.</p>`
+          : `<p>Hemos tomado nota de su decisión. Si desea discutir esta decisión o explorar otras opciones, por favor contacte a nuestro equipo de ventas.</p>`
+        }
+        <p>Gracias por su confianza en Ecuatechnology.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo de confirmación de proforma (${action}) enviado a:`, clientMail);
+  } catch (error) {
+    console.error(`Error al enviar correo de confirmación de proforma (${action}):`, error);
+  }
+};
 
 export {
   sendMailToReceptionist,
   sendOTPEmail,
   sendPasswordChangedByAdmin,
-  sendForgotPasswordRequest
+  sendForgotPasswordRequest,
+  sendProformaEmail,          // <-- Exportar nueva función
+  sendProformaConfirmationEmail // <-- Exportar nueva función
 };

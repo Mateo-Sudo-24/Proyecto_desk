@@ -27,8 +27,10 @@ model User {
   Active       Boolean   @default(true) @map("Active")
   CreatedAt    DateTime  @default(now()) @map("CreatedAt")
 
-  userRoles    UserRole[]
-  serviceOrders ServiceOrder[] @relation("ReceptionistOrders")
+  userRoles           UserRole[]
+  receptionistOrders  ServiceOrder[] @relation("ReceptionistOrders")
+  technicianOrders    ServiceOrder[] @relation("TechnicianOrders")
+  otps                OTP[] // Link to the new OTP model
 
   @@map("security.Users")
 }
@@ -44,6 +46,20 @@ model UserRole {
   @@map("security.UserRoles")
 }
 
+// New OTP model for better management
+model OTP {
+  OTPId      Int      @id @default(autoincrement()) @map("OTPId")
+  UserId     Int      @map("UserId")
+  Code       String   @map("Code")
+  ExpiresAt  DateTime @map("ExpiresAt")
+  IsUsed     Boolean  @default(false) @map("IsUsed")
+  CreatedAt  DateTime @default(now()) @map("CreatedAt")
+
+  user User @relation(fields: [UserId], references: [UserId])
+
+  @@map("security.OTPs")
+}
+
 model ClientType {
   ClientTypeId Int     @id @default(autoincrement()) @map("ClientTypeId")
   Code         String  @unique @map("Code")
@@ -54,20 +70,33 @@ model ClientType {
   @@map("core.ClientTypes")
 }
 
-model Client {
-  ClientId     Int      @id @default(autoincrement()) @map("ClientId")
-  ClientTypeId Int      @map("ClientTypeId")
-  DisplayName  String   @map("DisplayName")
-  IdNumber     String   @unique @map("IdNumber")
-  Email        String?  @map("Email")
-  Phone        String?  @map("Phone")
-  Address      String?  @map("Address")
-  ContactName  String?  @map("ContactName")
-  CreatedAt    DateTime @default(now()) @map("CreatedAt")
+// schema.prisma (Fragmento actualizado)
 
-  clientType ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId])
-  equipments Equipment[]
-  serviceOrders ServiceOrder[]
+model Client {
+  ClientId        Int      @id @default(autoincrement()) @map("ClientId")
+  ClientTypeId    Int      @map("ClientTypeId")
+  DisplayName     String   @map("DisplayName")
+  IdNumber        String   @unique @map("IdNumber")
+  Email           String?  @unique @map("Email") // <-- Hacemos el email único para el login
+  Phone           String?  @map("Phone")
+  Address         String?  @map("Address")
+  ContactName     String?  @map("ContactName")
+  CreatedAt       DateTime @default(now()) @map("CreatedAt")
+  
+  IsPublicService Boolean  @default(false) @map("IsPublicService")
+  OrganizationName String? @map("OrganizationName")
+  DeliveryAddress String? @map("DeliveryAddress")
+
+  // --- CAMPOS AÑADIDOS DESDE TU LÓGICA WEB ---
+  PasswordHash    Bytes?    @map("PasswordHash")      // Para guardar la contraseña del cliente
+  ConfirmToken    String?   @map("ConfirmToken")      // Token para confirmar el email
+  IsEmailVerified Boolean   @default(false) @map("IsEmailVerified")
+  OTP             String?   @map("OTP")               // Código OTP para el login 2FA
+  OTPExpires      DateTime? @map("OTPExpires")
+
+  clientType      ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId])
+  equipments      Equipment[]
+  serviceOrders   ServiceOrder[]
 
   @@map("core.Clients")
 }
@@ -93,6 +122,7 @@ model Equipment {
 
   client        Client        @relation(fields: [ClientId], references: [ClientId])
   equipmentType EquipmentType @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId])
+  serviceOrders ServiceOrder[] // Link equipment to service orders
 
   @@map("core.Equipments")
 }
@@ -113,22 +143,74 @@ model Status {
 model ServiceOrder {
   OrderId        Int      @id @default(autoincrement()) @map("OrderId")
   ClientId       Int      @map("ClientId")
+  EquipmentId    Int      @map("EquipmentId") // New: Link to specific equipment
   ReceptionistId Int      @map("ReceptionistId")
   TechnicianId   Int?     @map("TechnicianId")
   IntakeDate     DateTime @default(now()) @map("IntakeDate")
   IdentityTag    String   @unique @map("IdentityTag")
   CurrentStatusId Int     @map("CurrentStatusId")
   Diagnosis      String?  @map("Diagnosis")
-  ProformaStatus String?  @map("ProformaStatus")
+  ProformaStatus String?  @default("pendiente") @map("ProformaStatus") // "pendiente", "enviada", "aprobada", "rechazada"
+  ProformaSentDate DateTime? @map("ProformaSentDate") // New: When proforma was sent
+  ProformaApprovalDate DateTime? @map("ProformaApprovalDate") // New: When proforma was approved/rejected
   Parts          String?  @map("Parts")
-  TotalPrice     Float?   @map("TotalPrice")
+  TotalPrice     Decimal? @map("TotalPrice") @db.Money // Using Decimal for money
   Notes          String?  @map("Notes")
   EstimatedDeliveryDate DateTime? @map("EstimatedDeliveryDate")
+  ServiceStartDate DateTime? @map("ServiceStartDate") // New: When technician starts working
+  ServiceEndDate   DateTime? @map("ServiceEndDate")   // New: When technician finishes
 
-  client Client @relation(fields: [ClientId], references: [ClientId])
-  receptionist User @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId])
-  technician User? @relation(fields: [TechnicianId], references: [UserId])
-  status Status @relation(fields: [CurrentStatusId], references: [StatusId])
+  client       Client   @relation(fields: [ClientId], references: [ClientId])
+  equipment    Equipment @relation(fields: [EquipmentId], references: [EquipmentId]) // New relation
+  receptionist User     @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId])
+  technician   User?    @relation("TechnicianOrders", fields: [TechnicianId], references: [UserId])
+  status       Status   @relation(fields: [CurrentStatusId], references: [StatusId])
+  
+  histories    OrderStatusHistory[]
 
   @@map("ops.ServiceOrders")
+}
+
+model OrderStatusHistory {
+  HistoryId   Int      @id @default(autoincrement()) @map("HistoryId")
+  OrderId     Int      @map("OrderId")
+  StatusId    Int      @map("StatusId")
+  ChangedAt   DateTime @default(now()) @map("ChangedAt")
+  Notes       String?  @map("Notes")
+  ChangedByUserId Int? @map("ChangedByUserId") // Who changed the status
+
+  order  ServiceOrder @relation(fields: [OrderId], references: [OrderId])
+  status Status       @relation(fields: [StatusId], references: [StatusId])
+  // Optionally, link to a User who made the change
+  // changedBy User? @relation(fields: [ChangedByUserId], references: [UserId])
+
+  @@map("ops.OrderStatusHistory")
+}
+
+// New models for explicit equipment entry/exit
+model EquipmentEntry {
+  EntryId     Int      @id @default(autoincrement()) @map("EntryId")
+  OrderId     Int      @unique @map("OrderId") // Each entry linked to one service order
+  EnteredAt   DateTime @default(now()) @map("EnteredAt")
+  ReceivedByUserId Int @map("ReceivedByUserId") // Receptionist who received it
+  Notes       String?  @map("Notes")
+
+  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId])
+  receivedBy  User @relation(fields: [ReceivedByUserId], references: [UserId])
+
+  @@map("ops.EquipmentEntries")
+}
+
+model EquipmentExit {
+  ExitId      Int      @id @default(autoincrement()) @map("ExitId")
+  OrderId     Int      @unique @map("OrderId") // Each exit linked to one service order
+  ExitedAt    DateTime @default(now()) @map("ExitedAt")
+  DeliveredByUserId Int @map("DeliveredByUserId") // Staff who delivered it
+  ReceivedByClientName String? @map("ReceivedByClientName") // Name of person who picked up
+  Notes       String?  @map("Notes")
+
+  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId])
+  deliveredBy User @relation(fields: [DeliveredByUserId], references: [UserId])
+
+  @@map("ops.EquipmentExits")
 }

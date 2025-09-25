@@ -1,22 +1,26 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
-
+/**
+ * Middleware para verificar roles.
+ * Lee los roles desde `req.auth.roles` (establecido por el middleware `authenticateHybrid`).
+ * DEBE usarse DESPUÉS de `authenticateHybrid`.
+ * 
+ * @param {string[]} allowedRoles - Un array de nombres de roles permitidos.
+ */
 export function requireRoles(allowedRoles) {
-  return async (req, res, next) => {
-    const userId = req.session.userId;
-    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+  return (req, res, next) => {
+    // Verifica que el usuario sea un empleado y tenga roles
+    if (!req.auth || req.auth.type !== 'employee' || !req.auth.roles) {
+      return res.status(403).json({ error: 'Acceso denegado. Esta acción es solo para empleados.' });
+    }
 
-    const user = await prisma.user.findUnique({
-      where: { UserId: userId },
-      include: { userRoles: { include: { role: true } } }
-    });
+    const userRoles = req.auth.roles;
+    
+    // Comprueba si el empleado tiene al menos uno de los roles requeridos
+    const hasAccess = userRoles.some(role => allowedRoles.includes(role));
 
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    const roles = user.userRoles.map(ur => ur.role.Name);
-    const hasAccess = roles.some(role => allowedRoles.includes(role));
-
-    if (!hasAccess) return res.status(403).json({ error: 'Acceso denegado' });
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Acceso denegado. No tienes los permisos necesarios.' });
+    }
+    
     next();
   };
 }
