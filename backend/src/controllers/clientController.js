@@ -1,14 +1,15 @@
-// clientController.js - Controlador exclusivo para operaciones de cliente
+// clientController.js - Controlador completo para operaciones de cliente
 import { PrismaClient } from '@prisma/client';
 import { sendProformaConfirmationEmail } from '../config/nodemailer.js';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 // === UTILIDADES Y HELPERS ===
 
 /**
- * Construye la respuesta de orden específica para el cliente
- * Incluye solo los campos que el cliente necesita ver
+ * Construye la respuesta completa de orden para el cliente
+ * Incluye historial de estados y detalles de seguimiento
  */
 const buildClientOrderResponse = (order) => {
   if (!order) return null;
@@ -18,22 +19,33 @@ const buildClientOrderResponse = (order) => {
     orderId: order.OrderId,
     identityTag: order.IdentityTag,
     
-    // Estado actual
+    // Estado actual y seguimiento
     currentStatus: order.status?.Name || 'Desconocido',
     statusCode: order.status?.Code,
+    statusHistory: order.orderStatusHistory?.map(history => ({
+      statusName: history.status?.Name,
+      statusCode: history.status?.Code,
+      changeDate: history.ChangedDate,
+      notes: history.Notes,
+      changedBy: history.changedByUser?.Username || 'Sistema'
+    })) || [],
     
     // Información del servicio
     diagnosis: order.Diagnosis,
     totalPrice: order.TotalPrice,
+    parts: order.Parts,
     notes: order.Notes,
     
-    // Fechas importantes
+    // Fechas importantes del proceso
+    intakeDate: order.IntakeDate,
     estimatedDeliveryDate: order.EstimatedDeliveryDate,
-    proformaSentDate: order.ProformaSentDate,
-    proformaApprovalDate: order.ProformaApprovalDate,
+    serviceStartDate: order.ServiceStartDate,
+    serviceEndDate: order.ServiceEndDate,
     
     // Estado de proforma
-    proformaStatus: order.ProformaStatus, // "pendiente", "enviada", "aprobada", "rechazada"
+    proformaStatus: order.ProformaStatus,
+    proformaSentDate: order.ProformaSentDate,
+    proformaApprovalDate: order.ProformaApprovalDate,
     
     // Información del equipo
     equipment: {
@@ -45,22 +57,30 @@ const buildClientOrderResponse = (order) => {
       type: order.equipment?.equipmentType?.Name,
     },
     
-    // Información del cliente (en caso de que se necesite mostrar)
-    clientInfo: {
-      displayName: order.client?.DisplayName,
-      email: order.client?.Email,
-      phone: order.client?.Phone,
-      organizationName: order.client?.OrganizationName,
-      isPublicService: order.client?.IsPublicService,
-      deliveryAddress: order.client?.DeliveryAddress,
-    }
+    // Personal asignado
+    receptionist: order.receptionist?.Username,
+    technician: order.technician?.Username,
+    
+    // Entradas y salidas del equipo
+    equipmentEntry: order.equipmentEntries?.map(entry => ({
+      receivedDate: entry.ReceivedDate,
+      receivedBy: entry.receivedByUser?.Username,
+      notes: entry.Notes
+    })) || [],
+    
+    equipmentExit: order.equipmentExits?.map(exit => ({
+      deliveryDate: exit.DeliveryDate,
+      deliveredBy: exit.deliveredByUser?.Username,
+      receivedByClient: exit.ReceivedByClientName,
+      notes: exit.Notes
+    })) || []
   };
 };
 
 /**
- * Busca una orden por criterios específicos con includes optimizados para cliente
+ * Busca una orden con todos los includes necesarios para el seguimiento completo
  */
-const findClientOrder = async (criteria) => {
+const findClientOrderWithHistory = async (criteria) => {
   const includeFields = {
     status: true,
     client: true,
@@ -69,6 +89,25 @@ const findClientOrder = async (criteria) => {
         equipmentType: true,
       },
     },
+    receptionist: { select: { Username: true } },
+    technician: { select: { Username: true } },
+    orderStatusHistory: {
+      include: {
+        status: true,
+        changedByUser: { select: { Username: true } }
+      },
+      orderBy: { ChangedDate: 'desc' }
+    },
+    equipmentEntries: {
+      include: {
+        receivedByUser: { select: { Username: true } }
+      }
+    },
+    equipmentExits: {
+      include: {
+        deliveredByUser: { select: { Username: true } }
+      }
+    }
   };
 
   if (criteria.orderId) {
@@ -89,7 +128,7 @@ const findClientOrder = async (criteria) => {
 };
 
 /**
- * Valida que se proporcionen los criterios necesarios para buscar una orden
+ * Valida criterios de búsqueda
  */
 const validateSearchCriteria = (orderId, identityTag) => {
   if (!orderId && !identityTag) {
@@ -98,7 +137,7 @@ const validateSearchCriteria = (orderId, identityTag) => {
 };
 
 /**
- * Verifica que el cliente esté autenticado
+ * Verifica autenticación del cliente
  */
 const validateClientAuthentication = (req) => {
   const clientId = req.session?.clientId;
@@ -109,7 +148,7 @@ const validateClientAuthentication = (req) => {
 };
 
 /**
- * Verifica que la orden pertenezca al cliente autenticado
+ * Verifica que la orden pertenezca al cliente
  */
 const validateOrderOwnership = (order, clientId) => {
   if (!order || order.ClientId !== clientId) {
@@ -117,19 +156,179 @@ const validateOrderOwnership = (order, clientId) => {
   }
 };
 
-// === ENDPOINTS DEL CLIENTE ===
+/**
+ * Actualiza el estado de una orden y registra el cambio en el historial
+ */
+const updateOrderStatusAndHistory = async (orderId, newStatusId, notes, clientId = null) => {
+  try {
+    const updatedOrder = await prisma.serviceOrder.update({
+      where: { OrderId: Number(orderId) },
+      data: { CurrentStatusId: newStatusId },
+    });
+
+    await prisma.orderStatusHistory.create({
+      data: {
+        OrderId: Number(orderId),
+        StatusId: newStatusId,
+        Notes: notes,
+        ChangedByUserId: null, // Los clientes no son usuarios en la tabla User
+      },
+    });
+    
+    return updatedOrder;
+  } catch (error) {
+    console.error(`Error actualizando estado de orden ${orderId}:`, error);
+    throw new Error('Fallo al actualizar el estado de la orden');
+  }
+};
+
+// === AUTENTICACIÓN DE CLIENTE ===
 
 /**
- * Consulta pública del estado de una orden
- * Permite verificar el estado usando OrderId o IdentityTag sin autenticación
+ * Login de cliente usando email y contraseña
  */
-export const getOrderStatus = async (req, res) => {
+export const clientLogin = async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    // Buscar cliente por email
+    const client = await prisma.client.findUnique({
+      where: { Email: email }
+    });
+
+    if (!client || !client.PasswordHash) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Credenciales inválidas' 
+      });
+    }
+
+    // Verificar contraseña
+    const validPassword = await bcrypt.compare(password, client.PasswordHash.toString());
+    
+    if (!validPassword) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Credenciales inválidas' 
+      });
+    }
+
+    // Crear sesión
+    req.session.clientId = client.ClientId;
+    req.session.clientEmail = client.Email;
+    req.session.clientName = client.DisplayName;
+
+    res.json({
+      success: true,
+      message: 'Autenticación exitosa',
+      client: {
+        id: client.ClientId,
+        email: client.Email,
+        name: client.DisplayName,
+        organizationName: client.OrganizationName
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en clientLogin:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error interno del servidor durante el login' 
+    });
+  }
+};
+
+/**
+ * Cambio de contraseña del cliente
+ */
+export const clientChangePassword = async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  
+  try {
+    const clientId = validateClientAuthentication(req);
+    
+    const client = await prisma.client.findUnique({ 
+      where: { ClientId: clientId } 
+    });
+    
+    if (!client || !client.PasswordHash) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Cliente no encontrado' 
+      });
+    }
+
+    // Verificar contraseña actual
+    const validPassword = await bcrypt.compare(oldPassword, client.PasswordHash.toString());
+    
+    if (!validPassword) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Contraseña actual incorrecta' 
+      });
+    }
+
+    // Hashear nueva contraseña
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    
+    await prisma.client.update({
+      where: { ClientId: clientId },
+      data: { PasswordHash: Buffer.from(hashedNewPassword) }
+    });
+
+    res.json({
+      success: true,
+      message: 'Contraseña actualizada con éxito'
+    });
+
+  } catch (error) {
+    if (error.message === 'Cliente no autenticado') {
+      return res.status(401).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+    
+    console.error('Error en clientChangePassword:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error al cambiar contraseña' 
+    });
+  }
+};
+
+/**
+ * Logout del cliente
+ */
+export const clientLogout = (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Error al cerrar sesión' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Sesión cerrada exitosamente'
+    });
+  });
+};
+
+// === CONSULTA Y SEGUIMIENTO DE ÓRDENES ===
+
+/**
+ * Consulta pública del estado de una orden con historial completo
+ * Permite rastrear el progreso usando OrderId o IdentityTag
+ */
+export const getOrderStatusWithHistory = async (req, res) => {
   const { orderId, identityTag } = req.query;
 
   try {
     validateSearchCriteria(orderId, identityTag);
     
-    const order = await findClientOrder({ orderId, identityTag });
+    const order = await findClientOrderWithHistory({ orderId, identityTag });
 
     if (!order) {
       return res.status(404).json({ 
@@ -153,7 +352,7 @@ export const getOrderStatus = async (req, res) => {
       });
     }
     
-    console.error('Error en getOrderStatus:', error);
+    console.error('Error en getOrderStatusWithHistory:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Error al consultar estado de la orden' 
@@ -162,10 +361,9 @@ export const getOrderStatus = async (req, res) => {
 };
 
 /**
- * Lista todas las órdenes del cliente autenticado
- * Requiere autenticación de cliente
+ * Lista todas las órdenes del cliente autenticado con historial
  */
-export const listMyOrders = async (req, res) => {
+export const listMyOrdersWithHistory = async (req, res) => {
   try {
     const clientId = validateClientAuthentication(req);
 
@@ -178,6 +376,25 @@ export const listMyOrders = async (req, res) => {
             equipmentType: true,
           },
         },
+        receptionist: { select: { Username: true } },
+        technician: { select: { Username: true } },
+        orderStatusHistory: {
+          include: {
+            status: true,
+            changedByUser: { select: { Username: true } }
+          },
+          orderBy: { ChangedDate: 'desc' }
+        },
+        equipmentEntries: {
+          include: {
+            receivedByUser: { select: { Username: true } }
+          }
+        },
+        equipmentExits: {
+          include: {
+            deliveredByUser: { select: { Username: true } }
+          }
+        }
       },
       orderBy: { IntakeDate: 'desc' },
     });
@@ -200,7 +417,7 @@ export const listMyOrders = async (req, res) => {
       });
     }
     
-    console.error('Error en listMyOrders:', error);
+    console.error('Error en listMyOrdersWithHistory:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Error al listar órdenes del cliente' 
@@ -209,8 +426,7 @@ export const listMyOrders = async (req, res) => {
 };
 
 /**
- * Ver detalles de una orden específica del cliente
- * Requiere autenticación y que la orden pertenezca al cliente
+ * Ver detalles completos de una orden específica
  */
 export const viewOrderDetails = async (req, res) => {
   const { orderId } = req.params;
@@ -218,19 +434,7 @@ export const viewOrderDetails = async (req, res) => {
   try {
     const clientId = validateClientAuthentication(req);
 
-    const order = await prisma.serviceOrder.findUnique({
-      where: { OrderId: Number(orderId) },
-      include: {
-        status: true,
-        client: true,
-        equipment: {
-          include: {
-            equipmentType: true,
-          },
-        },
-      },
-    });
-
+    const order = await findClientOrderWithHistory({ orderId });
     validateOrderOwnership(order, clientId);
 
     const response = buildClientOrderResponse(order);
@@ -263,12 +467,13 @@ export const viewOrderDetails = async (req, res) => {
   }
 };
 
+// === GESTIÓN DE PROFORMAS ===
+
 /**
- * Aprobar o rechazar una proforma enviada
- * Endpoint crítico para el flujo de trabajo del cliente
+ * Aprobar o rechazar proforma con actualización de estado
  */
 export const approveOrRejectProforma = async (req, res) => {
-  const { orderId, action } = req.body; // action: 'approve' o 'reject'
+  const { orderId, action } = req.body;
 
   try {
     const clientId = validateClientAuthentication(req);
@@ -297,7 +502,7 @@ export const approveOrRejectProforma = async (req, res) => {
 
     validateOrderOwnership(order, clientId);
 
-    // Verificar que la proforma esté en estado correcto
+    // Verificar estado de proforma
     if (order.ProformaStatus !== 'enviada') {
       return res.status(400).json({ 
         success: false, 
@@ -305,7 +510,7 @@ export const approveOrRejectProforma = async (req, res) => {
       });
     }
 
-    // Preparar datos de actualización
+    // Preparar actualización
     let newStatusCode;
     let proformaNewStatus;
     let notes;
@@ -320,7 +525,7 @@ export const approveOrRejectProforma = async (req, res) => {
       notes = 'Proforma rechazada por el cliente';
     }
 
-    // Buscar el nuevo estado
+    // Buscar nuevo estado
     const newStatus = await prisma.status.findUnique({ 
       where: { Code: newStatusCode } 
     });
@@ -329,7 +534,7 @@ export const approveOrRejectProforma = async (req, res) => {
       throw new Error(`Estado "${newStatusCode}" no configurado en el sistema`);
     }
 
-    // Actualizar la orden
+    // Actualizar orden
     const updatedOrder = await prisma.serviceOrder.update({
       where: { OrderId: order.OrderId },
       data: {
@@ -348,15 +553,13 @@ export const approveOrRejectProforma = async (req, res) => {
       }
     });
 
-    // Registrar en historial de estados
-    await prisma.oRDER_STATUS_HISTORY.create({
-      data: {
-        OrderId: order.OrderId,
-        StatusId: newStatus.StatusId,
-        Notes: notes,
-        ChangedDate: new Date(),
-      },
-    });
+    // Registrar en historial
+    await updateOrderStatusAndHistory(
+      order.OrderId, 
+      newStatus.StatusId, 
+      notes, 
+      clientId
+    );
 
     // Enviar email de confirmación
     try {
@@ -368,7 +571,6 @@ export const approveOrRejectProforma = async (req, res) => {
       );
     } catch (emailError) {
       console.warn('Error enviando email de confirmación:', emailError);
-      // No fallar la operación por error de email
     }
 
     res.json({
@@ -398,4 +600,22 @@ export const approveOrRejectProforma = async (req, res) => {
       error: `Error al procesar la proforma: ${error.message}` 
     });
   }
+};
+
+// === ENDPOINTS DE COMPATIBILIDAD (LEGACY) ===
+
+/**
+ * Endpoint legacy para consulta simple de estado
+ */
+export const getOrderStatus = async (req, res) => {
+  // Redirigir a la versión con historial
+  return getOrderStatusWithHistory(req, res);
+};
+
+/**
+ * Endpoint legacy para listar órdenes
+ */
+export const listMyOrders = async (req, res) => {
+  // Redirigir a la versión con historial
+  return listMyOrdersWithHistory(req, res);
 };
