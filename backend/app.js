@@ -6,8 +6,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 // --- Importar Lógica Personalizada ---
-import httpLogger from './src/middlewares/httpLogger.middleware.js'; // <-- Logging
-import employeeAuthRoutes from './src/routes/auth.js';              // <-- Login para Empleados (JWT)
+import httpLogger from './src/middlewares/httpLogger.js'; // <-- Logging
+import employeeAuthRoutes from './auth.js';              // <-- Login para Empleados (JWT)
 import clientAuthRoutes from './src/routes/client-auth.js';         // <-- Login para Clientes (Session)
 import adminRoutes from './src/routes/adminRoutes.js';
 import employeeRoutes from './src/routes/employeeRoutes.js';

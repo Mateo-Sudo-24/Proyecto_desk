@@ -1,6 +1,6 @@
 // src/middlewares/httpLogger.middleware.js
 import morgan from 'morgan';
-import logger from '../config/logger.js';
+import logger from '../../config/logger.js'; // Asegúrate de que la ruta sea correcta
 
 const stream = {
   // Usa el nivel 'http' de Winston

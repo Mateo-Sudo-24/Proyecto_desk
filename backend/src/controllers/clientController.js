@@ -1,6 +1,6 @@
 // clientController.js - Controlador completo para operaciones de cliente
 import { PrismaClient } from '@prisma/client';
-import { sendProformaConfirmationEmail } from '../config/nodemailer.js';
+import { sendProformaConfirmationEmail } from '../../config/nodemailer.js';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();

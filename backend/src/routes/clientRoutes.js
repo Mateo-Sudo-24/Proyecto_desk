@@ -16,6 +16,7 @@ import {
   viewOrderDetails,
   approveOrRejectProforma
 } from '../controllers/clientController.js';
+import { requireClientAuth } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
