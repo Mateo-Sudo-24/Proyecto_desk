@@ -2,8 +2,7 @@
 import {
   createOrUpdateClient, 
   registerEquipment,
-  sendProformaToClient
-} from '../services/employeeService.js';
+  sendProformaToClient } from '../services/employeeService.js';
 import { sendForgotPasswordRequest } from '../../config/nodemailer.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';

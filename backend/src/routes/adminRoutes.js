@@ -13,6 +13,7 @@ import {
   adminDeleteRole
 } from '../controllers/adminController.js';
 import { requireRoles } from '../middlewares/rolemiddleware.js';
+import { getSystemLogs } from '../controllers/adminController.js';
 const router = express.Router();
 
 // --- GESTIÓN DE USUARIOS ---
@@ -31,5 +32,6 @@ router.post('/role/create', requireRoles(['Administrador']), adminCreateRole);
 router.get('/role/list', requireRoles(['Administrador']), adminListRoles);
 router.post('/role/update', requireRoles(['Administrador']), adminUpdateRole);
 router.post('/role/delete', requireRoles(['Administrador']), adminDeleteRole);
-
+// Ruta para que el admin vea los logs del sistema
+router.get('/system/logs', requireRoles(['Administrador']), getSystemLogs);
 export default router;

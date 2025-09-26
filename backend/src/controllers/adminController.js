@@ -3,6 +3,7 @@ import {
   createUserWithRole, adminChangePassword, findUserByUsernameOrEmail
 } from '../services/adminService.js';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -12,11 +13,10 @@ const prisma = new PrismaClient();
 export const adminCreateUser = async (req, res) => {
   const { email, username, password, roleName } = req.body;
   try {
-    // Solo un admin puede crear otro admin
-    if (roleName === 'Administrador' && !req.session.roles.includes('Administrador')) {
+    // CORRECTO: Usa req.auth.roles que viene del JWT
+    if (roleName === 'Administrador' && !req.auth.roles.includes('Administrador')) {
       return res.status(403).json({ error: 'Solo un administrador puede crear otro administrador' });
     }
-
     const user = await createUserWithRole({ email, username, password, roleName });
     res.status(201).json({ message: 'Usuario creado', user });
   } catch (error) {
@@ -39,20 +39,25 @@ export const adminSetUserPassword = async (req, res) => {
 export const adminDeleteUser = async (req, res) => {
   const { userId } = req.body;
   try {
-    if (userId === 1) return res.status(403).json({ error: 'No se puede eliminar el administrador principal' });
-
-    const user = await prisma.user.findUnique({
-      where: { UserId: userId },
-      include: { userRoles: { include: { role: true } } }
-    });
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    // Solo admin puede borrar admin
-    if (user.userRoles.some(ur => ur.role.Name === 'Administrador') && !req.session.roles.includes('Administrador')) {
-      return res.status(403).json({ error: 'Solo un administrador puede eliminar otro administrador' });
+    if (Number(userId) === 1) return res.status(403).json({ error: 'No se puede eliminar el administrador principal' });
+    
+    // CORRECTO: Usa req.auth.userId para la auto-eliminación y req.auth.roles para permisos
+    if (Number(userId) === req.auth.userId) {
+        return res.status(403).json({ error: 'No puedes eliminar tu propia cuenta.' });
     }
 
-    await prisma.user.delete({ where: { UserId: userId } });
+    const userToDelete = await prisma.user.findUnique({
+      where: { UserId: Number(userId) },
+      include: { userRoles: { include: { role: true } } }
+    });
+    if (!userToDelete) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const isDeletingAdmin = userToDelete.userRoles.some(ur => ur.role.Name === 'Administrador');
+    if (isDeletingAdmin && !req.auth.roles.includes('Administrador')) {
+      return res.status(403).json({ error: 'Solo un administrador puede eliminar otro administrador' });
+    }
+    
+    await prisma.user.delete({ where: { UserId: Number(userId) } });
     res.json({ message: 'Usuario eliminado' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -159,4 +164,16 @@ export const adminDeleteRole = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+};
+
+// --- ¡NUEVO! FUNCIÓN PARA VER LOGS ---
+export const getSystemLogs = async (req, res) => {
+    try {
+        // Lee el archivo de logs. En producción, se usaría un sistema de gestión de logs.
+        const logData = fs.readFileSync('logs/all.log', 'utf8');
+        res.header('Content-Type', 'text/plain');
+        res.send(logData);
+    } catch (error) {
+        res.status(500).json({ error: "No se pudieron obtener los logs.", details: error.message });
+    }
 };
