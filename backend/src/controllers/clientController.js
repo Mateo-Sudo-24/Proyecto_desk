@@ -273,7 +273,7 @@ export const clientChangePassword = async (req, res) => {
     
     await prisma.client.update({
       where: { ClientId: clientId },
-      data: { PasswordHash: Buffer.from(hashedNewPassword) }
+      data: { PasswordHash: hashedNewPassword }
     });
 
     res.json({

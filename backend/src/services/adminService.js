@@ -32,7 +32,7 @@ export async function createUserWithRole({ email, username, password, roleName, 
   const user = await prisma.user.create({
     data: {
       Username: username,
-      PasswordHash: Buffer.from(hashed),
+      PasswordHash: hashed,
       Email: email,
       Active: true,
       userRoles: {
@@ -50,7 +50,7 @@ export async function createUserWithRole({ email, username, password, roleName, 
 // Cambia la contraseña de un usuario (solo admin autorizado)
 export async function adminChangePassword(userId, newPassword, notifyEmail = false) {
   const hashed = await bcrypt.hash(newPassword, 10);
-  const user = await prisma.user.update({ where: { UserId: userId }, data: { PasswordHash: Buffer.from(hashed) }, include: { userRoles: { include: { role: true } } } });
+  const user = await prisma.user.update({ where: { UserId: userId }, data: { PasswordHash: hashed }, include: { userRoles: { include: { role: true } } } });
   if (notifyEmail && user.Email) {
     const { sendPasswordChangedByAdmin } = await import('../../config/nodemailer.js');
     await sendPasswordChangedByAdmin(user.Email, user.Username, newPassword);

@@ -1,5 +1,5 @@
-// src/config/logger.js
 import winston from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 
 const levels = {
   error: 0,
@@ -9,30 +9,40 @@ const levels = {
   debug: 4,
 };
 
+const level = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+
 const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.printf(
-    (info) => `${info.timestamp} ${info.level.toUpperCase()}: ${info.message}`,
+    (info) => `[${info.timestamp}] ${info.level.toUpperCase()}: ${info.message}`,
+  ),
+);
+
+const consoleFormat = winston.format.combine(
+  winston.format.colorize({ all: true }),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.printf(
+    (info) => `[${info.timestamp}] ${info.level}: ${info.message}`,
   ),
 );
 
 const transports = [
-  // Mostrar todos los logs en la consola durante el desarrollo
-  new winston.transports.Console({
-    format: winston.format.combine(winston.format.colorize({ all: true })),
+  new winston.transports.Console({ format: consoleFormat }),
+  new DailyRotateFile({
+    filename: 'logs/%DATE%-combined.log',
+    datePattern: 'YYYY-MM-DD',
+    maxFiles: '14d',
   }),
-  // Guardar todos los logs en un archivo
-  new winston.transports.File({
-    filename: 'logs/all.log',
-  }),
-  // Guardar solo los logs de error en un archivo separado
-  new winston.transports.File({
-    filename: 'logs/error.log',
+  new DailyRotateFile({
+    filename: 'logs/%DATE%-error.log',
+    datePattern: 'YYYY-MM-DD',
     level: 'error',
+    maxFiles: '30d',
   }),
 ];
 
 const logger = winston.createLogger({
+  level,
   levels,
   format,
   transports,

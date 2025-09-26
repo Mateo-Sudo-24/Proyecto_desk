@@ -388,7 +388,7 @@ export const employeeChangePassword = async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { UserId: userId },
-      data: { PasswordHash: Buffer.from(hashed) }
+      data: { PasswordHash: hashed }
     });
 
     res.json({ message: 'Contraseña actualizada con éxito' });

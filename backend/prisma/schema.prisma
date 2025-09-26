@@ -1,7 +1,7 @@
 // schema.prisma
 datasource db {
   provider = "sqlserver"
-  url      = env("DATABASE_URL") // "sqlserver://user:password@localhost:1433;database=ServicioTecnicoDB;trustServerCertificate=true"
+  url      = env("DATABASE_URL") // "sqlserver://user:password@localhost:1433;database=EcuatechnologyDB;trustServerCertificate=true"
 }
 
 generator client {
@@ -21,7 +21,7 @@ model Role {
 model User {
   UserId       Int       @id @default(autoincrement()) @map("UserId")
   Username     String    @unique @map("Username")
-  PasswordHash Bytes     @map("PasswordHash")
+  PasswordHash String    @map("PasswordHash")
   Email        String?   @map("Email")
   Phone        String?   @map("Phone")
   Active       Boolean   @default(true) @map("Active")
@@ -30,7 +30,11 @@ model User {
   userRoles           UserRole[]
   receptionistOrders  ServiceOrder[] @relation("ReceptionistOrders")
   technicianOrders    ServiceOrder[] @relation("TechnicianOrders")
-  otps                OTP[] // Link to the new OTP model
+  otps                OTP[]
+  // Nuevas relaciones agregadas
+  equipmentEntries    EquipmentEntry[] @relation("EntryReceiver")
+  equipmentExits      EquipmentExit[] @relation("ExitDeliverer")
+  statusChanges       OrderStatusHistory[] @relation("StatusChanger")
 
   @@map("security.Users")
 }
@@ -39,8 +43,8 @@ model UserRole {
   UserId Int @map("UserId")
   RoleId Int @map("RoleId")
 
-  user User @relation(fields: [UserId], references: [UserId])
-  role Role @relation(fields: [RoleId], references: [RoleId])
+  user User @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
+  role Role @relation(fields: [RoleId], references: [RoleId], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([UserId, RoleId])
   @@map("security.UserRoles")
@@ -55,7 +59,7 @@ model OTP {
   IsUsed     Boolean  @default(false) @map("IsUsed")
   CreatedAt  DateTime @default(now()) @map("CreatedAt")
 
-  user User @relation(fields: [UserId], references: [UserId])
+  user User @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("security.OTPs")
 }
@@ -70,14 +74,12 @@ model ClientType {
   @@map("core.ClientTypes")
 }
 
-// schema.prisma (Fragmento actualizado)
-
 model Client {
   ClientId        Int      @id @default(autoincrement()) @map("ClientId")
   ClientTypeId    Int      @map("ClientTypeId")
   DisplayName     String   @map("DisplayName")
   IdNumber        String   @unique @map("IdNumber")
-  Email           String?  @unique @map("Email") // <-- Hacemos el email único para el login
+  Email           String?  @unique @map("Email")
   Phone           String?  @map("Phone")
   Address         String?  @map("Address")
   ContactName     String?  @map("ContactName")
@@ -87,14 +89,14 @@ model Client {
   OrganizationName String? @map("OrganizationName")
   DeliveryAddress String? @map("DeliveryAddress")
 
-  // --- CAMPOS AÑADIDOS DESDE TU LÓGICA WEB ---
-  PasswordHash    Bytes?    @map("PasswordHash")      // Para guardar la contraseña del cliente
-  ConfirmToken    String?   @map("ConfirmToken")      // Token para confirmar el email
+  // Campos de autenticación
+  PasswordHash    String?   @map("PasswordHash")  // Cambiado de Bytes? a String?
+  ConfirmToken    String?   @map("ConfirmToken")
   IsEmailVerified Boolean   @default(false) @map("IsEmailVerified")
-  OTP             String?   @map("OTP")               // Código OTP para el login 2FA
+  OTP             String?   @map("OTP")
   OTPExpires      DateTime? @map("OTPExpires")
 
-  clientType      ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId])
+  clientType      ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId], onDelete: NoAction, onUpdate: NoAction)
   equipments      Equipment[]
   serviceOrders   ServiceOrder[]
 
@@ -120,9 +122,9 @@ model Equipment {
   Description     String? @map("Description")
   CreatedAt       DateTime @default(now()) @map("CreatedAt")
 
-  client        Client        @relation(fields: [ClientId], references: [ClientId])
-  equipmentType EquipmentType @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId])
-  serviceOrders ServiceOrder[] // Link equipment to service orders
+  client        Client        @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  equipmentType EquipmentType @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId], onDelete: NoAction, onUpdate: NoAction)
+  serviceOrders ServiceOrder[]
 
   @@map("core.Equipments")
 }
@@ -143,30 +145,33 @@ model Status {
 model ServiceOrder {
   OrderId        Int      @id @default(autoincrement()) @map("OrderId")
   ClientId       Int      @map("ClientId")
-  EquipmentId    Int      @map("EquipmentId") // New: Link to specific equipment
+  EquipmentId    Int      @map("EquipmentId")
   ReceptionistId Int      @map("ReceptionistId")
   TechnicianId   Int?     @map("TechnicianId")
   IntakeDate     DateTime @default(now()) @map("IntakeDate")
   IdentityTag    String   @unique @map("IdentityTag")
   CurrentStatusId Int     @map("CurrentStatusId")
   Diagnosis      String?  @map("Diagnosis")
-  ProformaStatus String?  @default("pendiente") @map("ProformaStatus") // "pendiente", "enviada", "aprobada", "rechazada"
-  ProformaSentDate DateTime? @map("ProformaSentDate") // New: When proforma was sent
-  ProformaApprovalDate DateTime? @map("ProformaApprovalDate") // New: When proforma was approved/rejected
+  ProformaStatus String?  @default("pendiente") @map("ProformaStatus")
+  ProformaSentDate DateTime? @map("ProformaSentDate")
+  ProformaApprovalDate DateTime? @map("ProformaApprovalDate")
   Parts          String?  @map("Parts")
-  TotalPrice     Decimal? @map("TotalPrice") @db.Money // Using Decimal for money
+  TotalPrice     Float?   @map("TotalPrice") @db.Money // Cambiado de Decimal? a Float?
   Notes          String?  @map("Notes")
   EstimatedDeliveryDate DateTime? @map("EstimatedDeliveryDate")
-  ServiceStartDate DateTime? @map("ServiceStartDate") // New: When technician starts working
-  ServiceEndDate   DateTime? @map("ServiceEndDate")   // New: When technician finishes
+  ServiceStartDate DateTime? @map("ServiceStartDate")
+  ServiceEndDate   DateTime? @map("ServiceEndDate")
 
-  client       Client   @relation(fields: [ClientId], references: [ClientId])
-  equipment    Equipment @relation(fields: [EquipmentId], references: [EquipmentId]) // New relation
-  receptionist User     @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId])
-  technician   User?    @relation("TechnicianOrders", fields: [TechnicianId], references: [UserId])
-  status       Status   @relation(fields: [CurrentStatusId], references: [StatusId])
+  client       Client   @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  equipment    Equipment @relation(fields: [EquipmentId], references: [EquipmentId], onDelete: NoAction, onUpdate: NoAction)
+  receptionist User     @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  technician   User?    @relation("TechnicianOrders", fields: [TechnicianId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  status       Status   @relation(fields: [CurrentStatusId], references: [StatusId], onDelete: NoAction, onUpdate: NoAction)
   
   histories    OrderStatusHistory[]
+  // Nuevas relaciones inversas agregadas
+  equipmentEntry EquipmentEntry?
+  equipmentExit  EquipmentExit?
 
   @@map("ops.ServiceOrders")
 }
@@ -177,40 +182,38 @@ model OrderStatusHistory {
   StatusId    Int      @map("StatusId")
   ChangedAt   DateTime @default(now()) @map("ChangedAt")
   Notes       String?  @map("Notes")
-  ChangedByUserId Int? @map("ChangedByUserId") // Who changed the status
+  ChangedByUserId Int? @map("ChangedByUserId")
 
-  order  ServiceOrder @relation(fields: [OrderId], references: [OrderId])
-  status Status       @relation(fields: [StatusId], references: [StatusId])
-  // Optionally, link to a User who made the change
-  // changedBy User? @relation(fields: [ChangedByUserId], references: [UserId])
+  order     ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
+  status    Status       @relation(fields: [StatusId], references: [StatusId], onDelete: NoAction, onUpdate: NoAction)
+  changedBy User?        @relation("StatusChanger", fields: [ChangedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("ops.OrderStatusHistory")
 }
 
-// New models for explicit equipment entry/exit
 model EquipmentEntry {
   EntryId     Int      @id @default(autoincrement()) @map("EntryId")
-  OrderId     Int      @unique @map("OrderId") // Each entry linked to one service order
+  OrderId     Int      @unique @map("OrderId")
   EnteredAt   DateTime @default(now()) @map("EnteredAt")
-  ReceivedByUserId Int @map("ReceivedByUserId") // Receptionist who received it
+  ReceivedByUserId Int @map("ReceivedByUserId")
   Notes       String?  @map("Notes")
 
-  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId])
-  receivedBy  User @relation(fields: [ReceivedByUserId], references: [UserId])
+  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
+  receivedBy  User @relation("EntryReceiver", fields: [ReceivedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("ops.EquipmentEntries")
 }
 
 model EquipmentExit {
   ExitId      Int      @id @default(autoincrement()) @map("ExitId")
-  OrderId     Int      @unique @map("OrderId") // Each exit linked to one service order
+  OrderId     Int      @unique @map("OrderId")
   ExitedAt    DateTime @default(now()) @map("ExitedAt")
-  DeliveredByUserId Int @map("DeliveredByUserId") // Staff who delivered it
-  ReceivedByClientName String? @map("ReceivedByClientName") // Name of person who picked up
+  DeliveredByUserId Int @map("DeliveredByUserId")
+  ReceivedByClientName String? @map("ReceivedByClientName")
   Notes       String?  @map("Notes")
 
-  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId])
-  deliveredBy User @relation(fields: [DeliveredByUserId], references: [UserId])
+  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
+  deliveredBy User @relation("ExitDeliverer", fields: [DeliveredByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("ops.EquipmentExits")
 }
