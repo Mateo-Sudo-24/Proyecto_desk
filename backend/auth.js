@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { validate, schemas, sanitizeRequest } from '../middleware/validator.js';
+import { validate, schemas, sanitizeRequest } from './src/middlewares/validator.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();

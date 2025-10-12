@@ -15,7 +15,7 @@ import employeeRoutes from './src/routes/employeeRoutes.js';
 import clientRoutes from './src/routes/clientRoutes.js';
 import orderRoutes from './src/routes/orderRoutes.js';
 import { authenticateHybrid } from './src/middlewares/authMiddleware.js';
-import { sanitizeRequest } from './src/middleware/validator.js'; // NUEVO
+import { sanitizeRequest } from './src/middlewares/validator.js'; // NUEVO
 
 dotenv.config();
 const app = express();
