@@ -656,7 +656,7 @@ export const salesSendProforma = asyncHandler(async (req, res) => {
     order.client.DisplayName,
     order.IdentityTag,
     order.Parts,
-    order.TotalPrice.toNumber()
+    order.TotalPrice // Float ya es número, no necesita toNumber()
   );
 
   // Actualizar estado en transacción

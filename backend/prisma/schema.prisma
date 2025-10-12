@@ -26,6 +26,8 @@ model User {
   Phone        String?   @map("Phone")
   Active       Boolean   @default(true) @map("Active")
   CreatedAt    DateTime  @default(now()) @map("CreatedAt")
+  tickets          Ticket[] @relation("TicketAssignee")
+  ticketResponses  TicketResponse[] @relation("TicketResponder")
 
   userRoles           UserRole[]
   receptionistOrders  ServiceOrder[] @relation("ReceptionistOrders")
@@ -84,6 +86,8 @@ model Client {
   Address         String?  @map("Address")
   ContactName     String?  @map("ContactName")
   CreatedAt       DateTime @default(now()) @map("CreatedAt")
+  tickets          Ticket[]
+  ticketResponses  TicketResponse[]
   
   IsPublicService Boolean  @default(false) @map("IsPublicService")
   OrganizationName String? @map("OrganizationName")
@@ -161,6 +165,7 @@ model ServiceOrder {
   EstimatedDeliveryDate DateTime? @map("EstimatedDeliveryDate")
   ServiceStartDate DateTime? @map("ServiceStartDate")
   ServiceEndDate   DateTime? @map("ServiceEndDate")
+  tickets          Ticket[]
 
   client       Client   @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
   equipment    Equipment @relation(fields: [EquipmentId], references: [EquipmentId], onDelete: NoAction, onUpdate: NoAction)
@@ -217,3 +222,96 @@ model EquipmentExit {
 
   @@map("ops.EquipmentExits")
 }
+
+// Agregar estos modelos a tu schema.prisma existente
+
+// === SISTEMA DE TICKETS DE SOPORTE ===
+
+model TicketCategory {
+  CategoryId  Int     @id @default(autoincrement()) @map("CategoryId")
+  Code        String  @unique @map("Code")
+  Name        String  @map("Name")
+  Description String? @map("Description")
+  
+  tickets Ticket[]
+  
+  @@map("support.TicketCategories")
+}
+
+model Ticket {
+  TicketId     Int      @id @default(autoincrement()) @map("TicketId")
+  TicketNumber String   @unique @default(cuid()) @map("TicketNumber")
+  ClientId     Int?     @map("ClientId")
+  OrderId      Int?     @map("OrderId")
+  CategoryId   Int      @map("CategoryId")
+  Subject      String   @map("Subject")
+  Description  String   @map("Description") @db.Text
+  Priority     String   @default("normal") @map("Priority") // low, normal, high, urgent
+  Status       String   @default("open") @map("Status") // open, assigned, in_progress, resolved, closed
+  AssignedToUserId Int? @map("AssignedToUserId")
+  CreatedAt    DateTime @default(now()) @map("CreatedAt")
+  UpdatedAt    DateTime @updatedAt @map("UpdatedAt")
+  ResolvedAt   DateTime? @map("ResolvedAt")
+  ClosedAt     DateTime? @map("ClosedAt")
+  CreatedBy    String   @map("CreatedBy") // 'client' o 'employee'
+  
+  client       Client?       @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  order        ServiceOrder? @relation(fields: [OrderId], references: [OrderId], onDelete: NoAction, onUpdate: NoAction)
+  category     TicketCategory @relation(fields: [CategoryId], references: [CategoryId], onDelete: NoAction, onUpdate: NoAction)
+  assignedTo   User?         @relation("TicketAssignee", fields: [AssignedToUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  responses    TicketResponse[]
+  attachments  TicketAttachment[]
+  
+  @@index([ClientId])
+  @@index([OrderId])
+  @@index([Status])
+  @@index([AssignedToUserId])
+  @@map("support.Tickets")
+}
+
+model TicketResponse {
+  ResponseId   Int      @id @default(autoincrement()) @map("ResponseId")
+  TicketId     Int      @map("TicketId")
+  Message      String   @map("Message") @db.Text
+  RespondedByUserId Int? @map("RespondedByUserId")
+  RespondedByClient Int? @map("RespondedByClient")
+  IsInternal   Boolean  @default(false) @map("IsInternal") // Nota interna solo para staff
+  CreatedAt    DateTime @default(now()) @map("CreatedAt")
+  
+  ticket           Ticket  @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
+  respondedByUser  User?   @relation("TicketResponder", fields: [RespondedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  respondedByClient Client? @relation(fields: [RespondedByClient], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  
+  @@index([TicketId])
+  @@map("support.TicketResponses")
+}
+
+model TicketAttachment {
+  AttachmentId Int      @id @default(autoincrement()) @map("AttachmentId")
+  TicketId     Int      @map("TicketId")
+  FileName     String   @map("FileName")
+  FileUrl      String   @map("FileUrl")
+  FileSize     Int      @map("FileSize")
+  MimeType     String   @map("MimeType")
+  UploadedAt   DateTime @default(now()) @map("UploadedAt")
+  
+  ticket Ticket @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
+  
+  @@index([TicketId])
+  @@map("support.TicketAttachments")
+}
+
+// === ACTUALIZAR MODELOS EXISTENTES ===
+
+// Agregar estas relaciones a los modelos existentes:
+
+// En model User:
+//   tickets          Ticket[] @relation("TicketAssignee")
+//   ticketResponses  TicketResponse[] @relation("TicketResponder")
+
+// En model Client:
+//   tickets          Ticket[]
+//   ticketResponses  TicketResponse[]
+
+// En model ServiceOrder:
+//   tickets          Ticket[]
