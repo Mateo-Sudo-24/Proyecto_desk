@@ -239,11 +239,84 @@ const sendProformaConfirmationEmail = async (clientMail, clientName, identityTag
   }
 };
 
+// Agregar al archivo nodemailer.js
+
+/**
+ * Envía correo de verificación de email para clientes
+ */
+const sendVerificationEmail = async (userMail, userName, verificationToken) => {
+  const verificationUrl = `${process.env.CLIENT_APP_URL}/verify-email?token=${verificationToken}`;
+  
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: userMail,
+    subject: 'Ecuatechnology - Verifica tu dirección de email',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Verifica tu dirección de email</h2>
+        <p>Hola ${userName},</p>
+        <p>Para completar tu registro en Ecuatechnology, por favor verifica tu dirección de email haciendo clic en el siguiente enlace:</p>
+        <div class="button-container">
+          <a href="${verificationUrl}" class="button">Verificar mi email</a>
+        </div>
+        <p>Si no puedes hacer clic en el botón, copia y pega la siguiente URL en tu navegador:</p>
+        <p style="word-break: break-all; font-size: 12px; color: #666;">${verificationUrl}</p>
+        <p>Este enlace expirará en 24 horas.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de verificación enviado a:", userMail);
+  } catch (error) {
+    console.error("Error al enviar correo de verificación:", error);
+  }
+};
+
+/**
+ * Envía correo de recuperación de contraseña para clientes
+ */
+const sendPasswordResetEmail = async (userMail, userName, resetToken) => {
+  const resetUrl = `${process.env.CLIENT_APP_URL}/reset-password?token=${resetToken}`;
+  
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: userMail,
+    subject: 'Ecuatechnology - Restablecer tu contraseña',
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Restablecer contraseña</h2>
+        <p>Hola ${userName},</p>
+        <p>Hemos recibido una solicitud para restablecer tu contraseña. Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+        <div class="button-container">
+          <a href="${resetUrl}" class="button">Restablecer contraseña</a>
+        </div>
+        <p>Si no puedes hacer clic en el botón, copia y pega la siguiente URL en tu navegador:</p>
+        <p style="word-break: break-all; font-size: 12px; color: #666;">${resetUrl}</p>
+        <p>Este enlace expirará en 1 hora. Si no solicitaste este restablecimiento, ignora este mensaje.</p>
+        <hr>
+        <footer>© ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.</footer>
+      </div></body></html>`
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Correo de recuperación de contraseña enviado a:", userMail);
+  } catch (error) {
+    console.error("Error al enviar correo de recuperación de contraseña:", error);
+  }
+};
+
+// Agregar al export
 export {
   sendMailToReceptionist,
   sendOTPEmail,
   sendPasswordChangedByAdmin,
   sendForgotPasswordRequest,
-  sendProformaEmail,          // <-- Exportar nueva función
-  sendProformaConfirmationEmail // <-- Exportar nueva función
+  sendProformaEmail,
+  sendProformaConfirmationEmail,
+  sendVerificationEmail,      // Nueva función
+  sendPasswordResetEmail      // Nueva función
 };

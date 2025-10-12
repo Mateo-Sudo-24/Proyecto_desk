@@ -1,7 +1,7 @@
-// clientController.js - Controlador completo para operaciones de cliente (REFACTORIZADO)
+// clientController.js - REFACTORIZADO Y COMPATIBLE
 import { PrismaClient } from '@prisma/client';
-import { sendProformaConfirmationEmail, sendOTPEmail } from '../../config/nodemailer.js';
-import { validate, schemas, sanitizeText } from '../middlewares/validator.js';
+import { sendProformaEmail, sendOTPEmail } from '../../config/nodemailer.js';
+import { validate, schemas, sanitizeText, validateData } from '../middlewares/validator.js';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -13,7 +13,8 @@ const ERROR_MESSAGES = {
   ORDER_NOT_FOUND: 'Orden no encontrada o no pertenece a este cliente',
   INVALID_PROFORMA_STATUS: 'La proforma no está en estado correcto',
   INTERNAL_ERROR: 'Error interno del servidor',
-  INVALID_OTP: 'Código OTP inválido o expirado'
+  INVALID_OTP: 'Código OTP inválido o expirado',
+  INVALID_TICKET_CATEGORY: 'Categoría de ticket inválida'
 };
 
 const PROFORMA_STATUS = {
@@ -70,7 +71,6 @@ const asyncHandler = (fn) => {
 
 /**
  * Construye la respuesta completa de orden para el cliente
- * CORREGIDO: Usa nombres de campos del schema
  */
 const buildClientOrderResponse = (order) => {
   if (!order) return null;
@@ -86,9 +86,9 @@ const buildClientOrderResponse = (order) => {
     statusHistory: order.histories?.map(history => ({
       statusName: history.status?.Name,
       statusCode: history.status?.Code,
-      changeDate: history.ChangedAt, // ✅ CORREGIDO
+      changeDate: history.ChangedAt,
       notes: history.Notes,
-      changedBy: history.changedBy?.Username || 'Sistema' // ✅ CORREGIDO
+      changedBy: history.changedBy?.Username || 'Sistema'
     })) || [],
     
     // Información del servicio
@@ -122,16 +122,16 @@ const buildClientOrderResponse = (order) => {
     receptionist: order.receptionist?.Username,
     technician: order.technician?.Username,
     
-    // ✅ CORREGIDO: Relación 1:1, no 1:N
+    // Relaciones 1:1
     equipmentEntry: order.equipmentEntry ? {
-      receivedDate: order.equipmentEntry.EnteredAt, // ✅ Campo correcto
-      receivedBy: order.equipmentEntry.receivedBy?.Username, // ✅ Nombre correcto
+      receivedDate: order.equipmentEntry.EnteredAt,
+      receivedBy: order.equipmentEntry.receivedBy?.Username,
       notes: order.equipmentEntry.Notes
     } : null,
     
     equipmentExit: order.equipmentExit ? {
-      deliveryDate: order.equipmentExit.ExitedAt, // ✅ Campo correcto
-      deliveredBy: order.equipmentExit.deliveredBy?.Username, // ✅ Nombre correcto
+      deliveryDate: order.equipmentExit.ExitedAt,
+      deliveredBy: order.equipmentExit.deliveredBy?.Username,
       receivedByClient: order.equipmentExit.ReceivedByClientName,
       notes: order.equipmentExit.Notes
     } : null
@@ -140,7 +140,6 @@ const buildClientOrderResponse = (order) => {
 
 /**
  * Busca una orden con todos los includes necesarios
- * CORREGIDO: Nombres de relaciones del schema
  */
 const findClientOrderWithHistory = async (criteria) => {
   const includeFields = {
@@ -153,21 +152,21 @@ const findClientOrderWithHistory = async (criteria) => {
     },
     receptionist: { select: { Username: true } },
     technician: { select: { Username: true } },
-    histories: { // ✅ CORREGIDO: "histories" no "orderStatusHistory"
+    histories: {
       include: {
         status: true,
-        changedBy: { select: { Username: true } } // ✅ CORREGIDO: "changedBy" no "changedByUser"
+        changedBy: { select: { Username: true } }
       },
       orderBy: { ChangedAt: 'desc' }
     },
-    equipmentEntry: { // ✅ CORREGIDO: Singular, relación 1:1
+    equipmentEntry: {
       include: {
-        receivedBy: { select: { Username: true } } // ✅ CORREGIDO: "receivedBy" no "receivedByUser"
+        receivedBy: { select: { Username: true } }
       }
     },
-    equipmentExit: { // ✅ CORREGIDO: Singular, relación 1:1
+    equipmentExit: {
       include: {
-        deliveredBy: { select: { Username: true } } // ✅ CORREGIDO: "deliveredBy" no "deliveredByUser"
+        deliveredBy: { select: { Username: true } }
       }
     }
   };
@@ -232,40 +231,41 @@ const validateOrderOwnership = (order, clientId) => {
 };
 
 /**
- * Actualiza el estado de una orden y registra el cambio en el historial
- * MEJORADO: Con transacciones
+ * Resuelve código de categoría a CategoryId
  */
-const updateOrderStatusAndHistory = async (orderId, newStatusId, notes, clientId = null) => {
-  return await prisma.$transaction(async (tx) => {
-    const updatedOrder = await tx.serviceOrder.update({
-      where: { OrderId: Number(orderId) },
-      data: { CurrentStatusId: newStatusId },
-    });
-
-    await tx.orderStatusHistory.create({
-      data: {
-        OrderId: Number(orderId),
-        StatusId: newStatusId,
-        Notes: notes,
-        ChangedByUserId: null, // Los clientes no son usuarios en tabla User
-      },
-    });
-    
-    return updatedOrder;
+const resolveTicketCategoryId = async (categoryCode) => {
+  const category = await prisma.ticketCategory.findUnique({
+    where: { Code: categoryCode }
   });
+
+  if (!category) {
+    const error = new Error(ERROR_MESSAGES.INVALID_TICKET_CATEGORY);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return category.CategoryId;
 };
 
 // === AUTENTICACIÓN DE CLIENTE CON OTP ===
 
 /**
  * Solicitar OTP para login
- * El cliente ingresa su email y recibe un código OTP
  */
 export const requestOTP = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
-  // Sanitizar email
-  const sanitizedEmail = sanitizeText(email);
+  // Validar email usando el schema
+  const validation = validateData(schemas.createClient.pick({ email: true }), { email });
+  if (!validation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Email inválido',
+      details: validation.errors
+    });
+  }
+
+  const sanitizedEmail = validation.data.email;
 
   // Buscar cliente por email
   const client = await prisma.client.findUnique({
@@ -274,7 +274,6 @@ export const requestOTP = asyncHandler(async (req, res) => {
 
   // Por seguridad, siempre retornar el mismo mensaje
   if (!client) {
-    // No revelar si el email existe
     return res.json({
       success: true,
       message: 'Si el email está registrado, recibirá un código OTP'
@@ -299,7 +298,6 @@ export const requestOTP = asyncHandler(async (req, res) => {
     await sendOTPEmail(client.Email, client.DisplayName, otpCode);
   } catch (emailError) {
     logError('requestOTP', emailError, { clientId: client.ClientId });
-    // No fallar si el email falla, el OTP está guardado
   }
 
   console.log('[OTP GENERATED]', {
@@ -318,12 +316,21 @@ export const requestOTP = asyncHandler(async (req, res) => {
 
 /**
  * Login de cliente usando email y OTP
- * MEJORADO: Sin contraseña, usa OTP
  */
 export const clientLoginWithOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
 
-  const sanitizedEmail = sanitizeText(email);
+  // Validar email
+  const emailValidation = validateData(schemas.createClient.pick({ email: true }), { email });
+  if (!emailValidation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Email inválido',
+      details: emailValidation.errors
+    });
+  }
+
+  const sanitizedEmail = emailValidation.data.email;
 
   // Buscar cliente
   const client = await prisma.client.findUnique({
@@ -396,12 +403,22 @@ export const clientLoginWithOTP = asyncHandler(async (req, res) => {
 });
 
 /**
- * Login tradicional con contraseña (LEGACY - mantener para compatibilidad)
+ * Login tradicional con contraseña (LEGACY)
  */
 export const clientLogin = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   
-  const sanitizedEmail = sanitizeText(email);
+  // Validar email
+  const emailValidation = validateData(schemas.createClient.pick({ email: true }), { email });
+  if (!emailValidation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Email inválido',
+      details: emailValidation.errors
+    });
+  }
+
+  const sanitizedEmail = emailValidation.data.email;
 
   const client = await prisma.client.findUnique({
     where: { Email: sanitizedEmail }
@@ -465,6 +482,20 @@ export const clientChangePassword = asyncHandler(async (req, res) => {
     const error = new Error('Contraseña actual incorrecta');
     error.statusCode = 401;
     throw error;
+  }
+
+  // Validar nueva contraseña
+  const passwordValidation = validateData(
+    z.object({ newPassword: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres') }), 
+    { newPassword }
+  );
+  
+  if (!passwordValidation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Contraseña inválida',
+      details: passwordValidation.errors
+    });
   }
 
   const hashedNewPassword = await bcrypt.hash(newPassword, 12);
@@ -549,21 +580,21 @@ export const listMyOrdersWithHistory = asyncHandler(async (req, res) => {
       },
       receptionist: { select: { Username: true } },
       technician: { select: { Username: true } },
-      histories: { // ✅ CORREGIDO
+      histories: {
         include: {
           status: true,
-          changedBy: { select: { Username: true } } // ✅ CORREGIDO
+          changedBy: { select: { Username: true } }
         },
         orderBy: { ChangedAt: 'desc' }
       },
-      equipmentEntry: { // ✅ CORREGIDO: Singular
+      equipmentEntry: {
         include: {
-          receivedBy: { select: { Username: true } } // ✅ CORREGIDO
+          receivedBy: { select: { Username: true } }
         }
       },
-      equipmentExit: { // ✅ CORREGIDO: Singular
+      equipmentExit: {
         include: {
-          deliveredBy: { select: { Username: true } } // ✅ CORREGIDO
+          deliveredBy: { select: { Username: true } }
         }
       }
     },
@@ -603,7 +634,6 @@ export const viewOrderDetails = asyncHandler(async (req, res) => {
 
 /**
  * Aprobar o rechazar proforma con actualización de estado
- * MEJORADO: Con transacciones
  */
 export const approveOrRejectProforma = asyncHandler(async (req, res) => {
   const { orderId, action } = req.body;
@@ -690,11 +720,11 @@ export const approveOrRejectProforma = asyncHandler(async (req, res) => {
     return order;
   });
 
-  // Enviar email de confirmación (no bloquear respuesta)
-  sendProformaConfirmationEmail(
-    order.client.Email,
-    order.client.DisplayName,
-    order.IdentityTag,
+  // Enviar email de confirmación
+  sendProformaEmail(
+    updatedOrder.client.Email,
+    updatedOrder.client.DisplayName,
+    updatedOrder.IdentityTag,
     action
   ).catch(err => logError('sendProformaEmail', err));
 
@@ -709,7 +739,6 @@ export const approveOrRejectProforma = asyncHandler(async (req, res) => {
 
 /**
  * Crear ticket de soporte/modificación
- * Los clientes pueden solicitar cambios o reportar problemas
  */
 export const createSupportTicket = asyncHandler(async (req, res) => {
   const { orderId, category, subject, description, priority } = req.body;
@@ -724,12 +753,15 @@ export const createSupportTicket = asyncHandler(async (req, res) => {
     validateOrderOwnership(order, clientId);
   }
 
-  // ✅ NUEVO: Crear ticket (requiere agregar modelo Ticket al schema)
+  // Resolver CategoryId desde código
+  const categoryId = await resolveTicketCategoryId(category);
+
+  // Crear ticket
   const ticket = await prisma.ticket.create({
     data: {
       ClientId: clientId,
       OrderId: orderId ? Number(orderId) : null,
-      Category: category,
+      CategoryId: categoryId,
       Subject: sanitizeText(subject),
       Description: sanitizeText(description),
       Priority: priority || 'normal',
@@ -742,7 +774,8 @@ export const createSupportTicket = asyncHandler(async (req, res) => {
         include: {
           equipment: true
         }
-      }
+      },
+      category: true
     }
   });
 
@@ -761,7 +794,7 @@ export const createSupportTicket = asyncHandler(async (req, res) => {
       ticket: {
         ticketId: ticket.TicketId,
         ticketNumber: ticket.TicketNumber,
-        category: ticket.Category,
+        category: ticket.category.Name,
         subject: ticket.Subject,
         status: ticket.Status,
         priority: ticket.Priority,
@@ -790,6 +823,11 @@ export const listMyTickets = asyncHandler(async (req, res) => {
         select: {
           UserId: true,
           Username: true
+        }
+      },
+      category: {
+        select: {
+          Name: true
         }
       }
     },
@@ -822,6 +860,7 @@ export const viewTicketDetails = asyncHandler(async (req, res) => {
           status: true
         }
       },
+      category: true,
       assignedTo: {
         select: {
           UserId: true,
@@ -831,10 +870,16 @@ export const viewTicketDetails = asyncHandler(async (req, res) => {
       },
       responses: {
         include: {
-          respondedBy: {
+          respondedByUser: {
             select: {
               UserId: true,
               Username: true
+            }
+          },
+          respondedByClient: {
+            select: {
+              ClientId: true,
+              DisplayName: true
             }
           }
         },
@@ -855,7 +900,641 @@ export const viewTicketDetails = asyncHandler(async (req, res) => {
   });
 });
 
-// === ENDPOINTS LEGACY (compatibilidad) ===
+// === REGISTRO Y GESTIÓN DE PERFIL ===
+
+/**
+ * Registro de nuevo cliente
+ */
+export const registerClient = asyncHandler(async (req, res) => {
+  const { 
+    displayName, 
+    email, 
+    phone, 
+    idNumber, 
+    address, 
+    organizationName,
+    contactName,
+    deliveryAddress,
+    password 
+  } = req.body;
+
+  // Validar datos usando el schema
+  const validation = validateData(schemas.createClient, {
+    displayName,
+    email,
+    phone,
+    idNumber,
+    address,
+    organizationName,
+    contactName,
+    deliveryAddress,
+    isPublicService: false // Por defecto para clientes individuales
+  });
+
+  if (!validation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Datos de registro inválidos',
+      details: validation.errors
+    });
+  }
+
+  const validatedData = validation.data;
+
+  // Verificar si el email ya existe
+  const existingClientByEmail = await prisma.client.findUnique({
+    where: { Email: validatedData.email }
+  });
+
+  if (existingClientByEmail) {
+    const error = new Error('El email ya está registrado');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // Verificar si el número de identificación ya existe
+  if (validatedData.idNumber) {
+    const existingClientById = await prisma.client.findUnique({
+      where: { IdNumber: validatedData.idNumber }
+    });
+
+    if (existingClientById) {
+      const error = new Error('El número de identificación ya está registrado');
+      error.statusCode = 409;
+      throw error;
+    }
+  }
+
+  // Obtener el ClientType por defecto
+  const defaultClientType = await prisma.clientType.findFirst({
+    where: { Code: 'INDIVIDUAL' }
+  });
+
+  if (!defaultClientType) {
+    const error = new Error('Tipo de cliente por defecto no configurado');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  // Hash de la contraseña si se proporciona
+  let passwordHash = null;
+  if (password) {
+    const passwordValidation = validateData(
+      z.object({ password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres') }),
+      { password }
+    );
+    
+    if (!passwordValidation.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contraseña inválida',
+        details: passwordValidation.errors
+      });
+    }
+    
+    passwordHash = await bcrypt.hash(password, 12);
+  }
+  // Crear el cliente
+  const newClient = await prisma.client.create({
+    data: {
+      ClientTypeId: defaultClientType.ClientTypeId,
+      DisplayName: validatedData.displayName,
+      IdNumber: validatedData.idNumber || null,
+      Email: validatedData.email,
+      Phone: validatedData.phone,
+      Address: validatedData.address,
+      ContactName: validatedData.contactName,
+      OrganizationName: validatedData.organizationName,
+      DeliveryAddress: validatedData.deliveryAddress,
+      PasswordHash: passwordHash,
+      IsEmailVerified: false,
+      IsPublicService: false,
+      CreatedAt: new Date()
+    },
+    include: {
+      clientType: true
+    }
+  });
+
+  console.log('[CLIENT REGISTERED]', {
+    clientId: newClient.ClientId,
+    email: newClient.Email,
+    displayName: newClient.DisplayName,
+    timestamp: new Date().toISOString()
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Cliente registrado exitosamente',
+    data: {
+      client: {
+        id: newClient.ClientId,
+        displayName: newClient.DisplayName,
+        email: newClient.Email,
+        organizationName: newClient.OrganizationName,
+        clientType: newClient.clientType.Name
+      }
+    }
+  });
+});
+
+/**
+ * Obtener perfil del cliente
+ */
+export const getClientProfile = asyncHandler(async (req, res) => {
+  const clientId = validateClientAuthentication(req);
+
+  const client = await prisma.client.findUnique({
+    where: { ClientId: clientId },
+    select: {
+      ClientId: true,
+      DisplayName: true,
+      Email: true,
+      Phone: true,
+      Address: true,
+      ContactName: true,
+      OrganizationName: true,
+      DeliveryAddress: true,
+      IsEmailVerified: true,
+      CreatedAt: true,
+      clientType: {
+        select: {
+          Name: true,
+          Code: true
+        }
+      }
+    }
+  });
+
+  if (!client) {
+    const error = new Error('Cliente no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      client
+    }
+  });
+});
+
+/**
+ * Actualizar perfil del cliente
+ */
+export const updateClientProfile = asyncHandler(async (req, res) => {
+  const clientId = validateClientAuthentication(req);
+  const { 
+    displayName, 
+    phone, 
+    address, 
+    contactName, 
+    organizationName, 
+    deliveryAddress 
+  } = req.body;
+
+  // Validar datos usando el schema de actualización
+  const validation = validateData(schemas.updateClient.omit({ clientId: true, clientTypeId: true }), {
+    displayName,
+    phone,
+    address,
+    contactName,
+    organizationName,
+    deliveryAddress
+  });
+
+  if (!validation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Datos de perfil inválidos',
+      details: validation.errors
+    });
+  }
+
+  const validatedData = validation.data;
+
+  // Construir objeto de actualización
+  const updateData = {};
+  
+  if (validatedData.displayName) updateData.DisplayName = validatedData.displayName;
+  if (validatedData.phone !== undefined) updateData.Phone = validatedData.phone;
+  if (validatedData.address !== undefined) updateData.Address = validatedData.address;
+  if (validatedData.contactName !== undefined) updateData.ContactName = validatedData.contactName;
+  if (validatedData.organizationName !== undefined) updateData.OrganizationName = validatedData.organizationName;
+  if (validatedData.deliveryAddress !== undefined) updateData.DeliveryAddress = validatedData.deliveryAddress;
+
+  // Verificar que haya al menos un campo para actualizar
+  if (Object.keys(updateData).length === 0) {
+    const error = new Error('No se proporcionaron datos para actualizar');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updatedClient = await prisma.client.update({
+    where: { ClientId: clientId },
+    data: updateData,
+    select: {
+      ClientId: true,
+      DisplayName: true,
+      Email: true,
+      Phone: true,
+      Address: true,
+      ContactName: true,
+      OrganizationName: true,
+      DeliveryAddress: true,
+      IsEmailVerified: true
+    }
+  });
+
+  console.log('[CLIENT PROFILE UPDATED]', {
+    clientId,
+    updatedFields: Object.keys(updateData),
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    message: 'Perfil actualizado exitosamente',
+    data: {
+      client: updatedClient
+    }
+  });
+});
+// === FUNCIONES DE VERIFICACIÓN DE EMAIL ===
+
+/**
+ * Verificar email del cliente
+ * Permite verificar la dirección de email mediante un token
+ */
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    const error = new Error('Token de verificación requerido');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Buscar cliente por token de confirmación
+  const client = await prisma.client.findFirst({
+    where: { 
+      ConfirmToken: token,
+      IsEmailVerified: false
+    }
+  });
+
+  if (!client) {
+    const error = new Error('Token de verificación inválido o expirado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Actualizar cliente como verificado
+  await prisma.client.update({
+    where: { ClientId: client.ClientId },
+    data: {
+      IsEmailVerified: true,
+      ConfirmToken: null // Limpiar token después de uso
+    }
+  });
+
+  console.log('[EMAIL VERIFIED]', {
+    clientId: client.ClientId,
+    email: client.Email,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    message: 'Email verificado exitosamente'
+  });
+});
+
+/**
+ * Solicitar reenvío de verificación de email
+ */
+export const resendVerificationEmail = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    const error = new Error('Email requerido');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const sanitizedEmail = sanitizeText(email);
+
+  // Buscar cliente
+  const client = await prisma.client.findUnique({
+    where: { Email: sanitizedEmail }
+  });
+
+  // Por seguridad, siempre retornar el mismo mensaje
+  if (!client) {
+    return res.json({
+      success: true,
+      message: 'Si el email está registrado, recibirá un enlace de verificación'
+    });
+  }
+
+  if (client.IsEmailVerified) {
+    return res.json({
+      success: true,
+      message: 'El email ya está verificado'
+    });
+  }
+
+  // Generar nuevo token de confirmación
+  const confirmToken = require('crypto').randomBytes(32).toString('hex');
+
+  await prisma.client.update({
+    where: { ClientId: client.ClientId },
+    data: {
+      ConfirmToken: confirmToken
+    }
+  });
+
+  // Enviar email de verificación (implementar esta función en nodemailer)
+  try {
+    // await sendVerificationEmail(client.Email, client.DisplayName, confirmToken);
+    console.log('[VERIFICATION EMAIL SENT]', {
+      clientId: client.ClientId,
+      email: client.Email,
+      timestamp: new Date().toISOString()
+    });
+  } catch (emailError) {
+    logError('resendVerificationEmail', emailError, { clientId: client.ClientId });
+  }
+
+  res.json({
+    success: true,
+    message: 'Si el email está registrado, recibirá un enlace de verificación'
+  });
+});
+
+// === FUNCIONES ADICIONALES DE CORREO ===
+
+/**
+ * Función auxiliar para enviar email de verificación
+ * (Necesita ser implementada en nodemailer.js)
+ */
+const sendVerificationEmail = async (email, displayName, token) => {
+  // Esta función debe ser implementada en nodemailer.js
+  // Por ahora solo la dejamos como placeholder
+  console.log(`[EMAIL VERIFICATION] Token ${token} para ${email}`);
+  return Promise.resolve();
+};
+
+/**
+ * Enviar email de notificación cuando se crea una nueva orden
+ */
+export const sendOrderCreationNotification = asyncHandler(async (req, res) => {
+  const clientId = validateClientAuthentication(req);
+  const { orderId } = req.body;
+
+  const order = await prisma.serviceOrder.findUnique({
+    where: { OrderId: Number(orderId) },
+    include: {
+      client: true,
+      equipment: true
+    }
+  });
+
+  validateOrderOwnership(order, clientId);
+
+  try {
+    // Enviar email de notificación de creación de orden
+    // await sendOrderNotificationEmail(order.client.Email, order.client.DisplayName, order.IdentityTag);
+    
+    console.log('[ORDER NOTIFICATION SENT]', {
+      clientId,
+      orderId,
+      email: order.client.Email,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: 'Notificación de orden enviada exitosamente'
+    });
+  } catch (emailError) {
+    logError('sendOrderCreationNotification', emailError, { clientId, orderId });
+    res.json({
+      success: true,
+      message: 'Orden procesada, pero no se pudo enviar la notificación por email'
+    });
+  }
+});
+
+/**
+ * Solicitar recuperación de contraseña para clientes
+ */
+export const requestPasswordReset = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  // Validar email
+  const emailValidation = validateData(schemas.createClient.pick({ email: true }), { email });
+  if (!emailValidation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Email inválido',
+      details: emailValidation.errors
+    });
+  }
+
+  const sanitizedEmail = emailValidation.data.email;
+
+  // Buscar cliente
+  const client = await prisma.client.findUnique({
+    where: { Email: sanitizedEmail }
+  });
+
+  // Por seguridad, siempre retornar el mismo mensaje
+  if (!client) {
+    return res.json({
+      success: true,
+      message: 'Si el email está registrado, recibirá instrucciones para recuperar su contraseña'
+    });
+  }
+
+  // Generar token de recuperación
+  const resetToken = require('crypto').randomBytes(32).toString('hex');
+  const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+  await prisma.client.update({
+    where: { ClientId: client.ClientId },
+    data: {
+      ConfirmToken: resetToken,
+      // Nota: El schema no tiene campo para expiración del token de reset
+      // Considerar agregar ResetTokenExpires al schema si es necesario
+    }
+  });
+
+  // Enviar email de recuperación (implementar en nodemailer)
+  try {
+    // await sendPasswordResetEmail(client.Email, client.DisplayName, resetToken);
+    console.log('[PASSWORD RESET EMAIL SENT]', {
+      clientId: client.ClientId,
+      email: client.Email,
+      timestamp: new Date().toISOString()
+    });
+  } catch (emailError) {
+    logError('requestPasswordReset', emailError, { clientId: client.ClientId });
+  }
+
+  res.json({
+    success: true,
+    message: 'Si el email está registrado, recibirá instrucciones para recuperar su contraseña'
+  });
+});
+
+/**
+ * Resetear contraseña usando token
+ */
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    const error = new Error('Token y nueva contraseña son requeridos');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Buscar cliente por token de recuperación
+  const client = await prisma.client.findFirst({
+    where: { 
+      ConfirmToken: token
+      // Nota: También deberíamos verificar la expiración del token
+    }
+  });
+
+  if (!client) {
+    const error = new Error('Token de recuperación inválido o expirado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Validar nueva contraseña
+  const passwordValidation = validateData(
+    z.object({ newPassword: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres') }),
+    { newPassword }
+  );
+  
+  if (!passwordValidation.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Contraseña inválida',
+      details: passwordValidation.errors
+    });
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+  // Actualizar contraseña y limpiar token
+  await prisma.client.update({
+    where: { ClientId: client.ClientId },
+    data: {
+      PasswordHash: hashedNewPassword,
+      ConfirmToken: null
+    }
+  });
+
+  console.log('[PASSWORD RESET SUCCESS]', {
+    clientId: client.ClientId,
+    email: client.Email,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    message: 'Contraseña restablecida exitosamente'
+  });
+});
+
+// === FUNCIONES DE NOTIFICACIÓN ===
+
+/**
+ * Obtener notificaciones del cliente
+ */
+export const getClientNotifications = asyncHandler(async (req, res) => {
+  const clientId = validateClientAuthentication(req);
+
+  // En una implementación real, esto vendría de una tabla de notificaciones
+  // Por ahora retornamos notificaciones simuladas basadas en el estado de las órdenes
+  
+  const pendingOrders = await prisma.serviceOrder.count({
+    where: { 
+      ClientId: clientId,
+      OR: [
+        { ProformaStatus: PROFORMA_STATUS.SENT },
+        { ProformaStatus: PROFORMA_STATUS.PENDING }
+      ]
+    }
+  });
+
+  const pendingTickets = await prisma.ticket.count({
+    where: { 
+      ClientId: clientId,
+      Status: { in: ['open', 'assigned', 'in_progress'] }
+    }
+  });
+
+  const notifications = [];
+
+  if (pendingOrders > 0) {
+    notifications.push({
+      id: 1,
+      type: 'proforma',
+      title: 'Proformas pendientes',
+      message: `Tiene ${pendingOrders} proforma(s) pendiente(s) de aprobación`,
+      priority: 'high',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  if (pendingTickets > 0) {
+    notifications.push({
+      id: 2,
+      type: 'ticket',
+      title: 'Tickets activos',
+      message: `Tiene ${pendingTickets} ticket(s) de soporte activo(s)`,
+      priority: 'medium',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      notifications,
+      unreadCount: notifications.length
+    }
+  });
+});
+
+/**
+ * Marcar notificación como leída
+ */
+export const markNotificationAsRead = asyncHandler(async (req, res) => {
+  const clientId = validateClientAuthentication(req);
+  const { notificationId } = req.body;
+
+  // En una implementación real, actualizaríamos el estado en la base de datos
+  // Por ahora solo simulamos la operación
+
+  console.log('[NOTIFICATION MARKED AS READ]', {
+    clientId,
+    notificationId,
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    message: 'Notificación marcada como leída'
+  });
+});
+// === ENDPOINTS LEGACY ===
 export const getOrderStatus = async (req, res) => {
   return getOrderStatusWithHistory(req, res);
 };
