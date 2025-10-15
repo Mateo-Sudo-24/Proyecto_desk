@@ -54,7 +54,99 @@ const loginLimiter = rateLimit({
 router.use(sanitizeRequest);
 
 // === UTILIDADES ===
+// ========================================
+// REGISTRO DE CLIENTE (PÚBLICO)
+// ========================================
+/**
+ * Registrar un nuevo cliente
+ * 
+ * POST /api/client-auth/register-web
+ * @body { 
+ *   DisplayName: string, 
+ *   Email: string, 
+ *   Password: string, 
+ *   IdNumber?: string, 
+ *   Phone?: string, 
+ *   Address?: string, 
+ *   ContactName?: string 
+ * }
+ * @public
+ */
+router.post('/register-web', async (req, res) => {
+  try {
+    const { DisplayName, Email, Password, IdNumber, Phone, Address, ContactName } = req.body;
 
+    if (!DisplayName || !Email || !Password) {
+      return res.status(400).json({
+        success: false,
+        error: 'DisplayName, Email y Password son requeridos'
+      });
+    }
+
+    // Validar y sanitizar email
+    const { isValid, sanitized } = validateAndSanitizeEmail(Email);
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email inválido'
+      });
+    }
+
+    // Verificar si el email ya existe
+    const existingClient = await prisma.client.findUnique({
+      where: { Email: sanitized }
+    });
+
+    if (existingClient) {
+      return res.status(409).json({
+        success: false,
+        error: 'Ya existe un cliente con este email'
+      });
+    }
+
+    // Hashear contraseña
+    const hashedPassword = await bcrypt.hash(Password, 10);
+
+    // Crear cliente en la base de datos
+const newClient = await prisma.client.create({
+  data: {
+    DisplayName,
+    Email: sanitized,
+    PasswordHash: hashedPassword,
+    IdNumber,
+    Phone,
+    Address,
+    ContactName,
+    ClientTypeId: 1 // ❗ Debes tener un ClientType con ID=1 en DB
+  },
+  select: {
+    ClientId: true,
+    DisplayName: true,
+    Email: true,
+    Phone: true
+  }
+});
+
+    res.status(201).json({
+      success: true,
+      message: 'Cliente registrado exitosamente',
+      data: newClient
+    });
+
+} catch (error) {
+  console.error('Error registrando cliente web:', error); // <- muestra el error real
+  logger.error('Error registrando cliente web', {
+    error: error.message,
+    stack: error.stack,
+    ip: req.ip
+  });
+
+  res.status(500).json({
+    success: false,
+    error: error.message // <- muestra error real en Postman
+  });
+}
+});
 /**
  * Genera código OTP de 6 dígitos
  */

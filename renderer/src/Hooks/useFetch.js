@@ -1,43 +1,89 @@
+import axios from "axios";
+import { useCallback } from "react";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 
-import { useState, useEffect, useCallback } from 'react';
+const MySwal = withReactContent(Swal);
 
-export default function useFetch(path, options = {}, auto = true) {
-  const apiUrl = import.meta.env.VITE_API_URL;
-  const url = apiUrl + path;
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(auto);
-  const [error, setError] = useState(null);
+// Solo una URL fija al backend en puerto 4000 o la variable de entorno
+const BASE_URL = import.meta.env.VITE_API_DESK ;
 
-  const fetchData = useCallback(async (body = null, customOptions = {}) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        ...options,
-        ...customOptions,
-        body: body ? JSON.stringify(body) : options.body,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-          ...(customOptions.headers || {})
+function useFetch() {
+  const fetchDataBackend = useCallback(
+    async (
+      endpoint,
+      data = null,
+      method = "GET",
+      showModals = true
+    ) => {
+      const url = endpoint.startsWith("/")
+        ? `${BASE_URL}${endpoint.slice(1)}`
+        : `${BASE_URL}${endpoint}`;
+
+      const token = localStorage.getItem("token");
+      const isFormData = data instanceof FormData;
+
+      const headers = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(!isFormData ? { "Content-Type": "application/json" } : {}),
+      };
+
+      if (showModals) {
+        await MySwal.fire({
+          title: "Procesando solicitud...",
+          text: "Por favor espera",
+          allowOutsideClick: false,
+          didOpen: () => MySwal.showLoading(),
+        });
+      }
+
+      try {
+        const response = await axios({
+          method: method.toUpperCase(),
+          url,
+          headers,
+          ...(method.toUpperCase() !== "GET" && data ? { data } : {}),
+        });
+
+        if (showModals) {
+          MySwal.close();
+          await MySwal.fire({
+            icon: "success",
+            title: "¡Éxito!",
+            text: response?.data?.msg || "Operación completada correctamente",
+            confirmButtonText: "OK",
+            backdrop: true,
+          });
         }
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Error en la petición');
-      setData(result);
-      return result;
-    } catch (err) {
-      setError(err.message);
-      setData(null);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [url, options]);
 
-  useEffect(() => {
-    if (auto && options.method === 'GET') fetchData();
-  }, [fetchData, auto, options.method]);
+        return response.data;
+      } catch (error) {
+        if (showModals) MySwal.close();
 
-  return { data, loading, error, fetchData };
+        const errorMsg =
+          error?.response?.data?.msg ||
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          "Error desconocido";
+
+        if (showModals) {
+          await MySwal.fire({
+            icon: "error",
+            title: "Error",
+            text: errorMsg,
+            confirmButtonText: "Entendido",
+            backdrop: true,
+          });
+        }
+
+        throw new Error(errorMsg);
+      }
+    },
+    []
+  );
+
+  return { fetchDataBackend };
 }
+
+export default useFetch;

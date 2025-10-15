@@ -118,7 +118,7 @@ app.get('/health', (req, res) => {
 // --- Rutas de Autenticación (Públicas) ---
 // Aplicar rate limiting solo a rutas de autenticación
 app.use('/api/auth', authLimiter, employeeAuthRoutes);      // Empleados/Admins (JWT)
-app.use('/api/client-auth', authLimiter, clientAuthRoutes); // Clientes (Session)
+app.use('/api/client-auth', /*authLimiter,*/ clientAuthRoutes); // Clientes (Session)
 
 // --- Rutas Protegidas ---
 // Rate limiting general para todas las rutas protegidas
