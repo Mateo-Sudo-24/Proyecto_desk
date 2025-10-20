@@ -1,63 +1,62 @@
-// src/layouts/Dashboard.jsx
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
-import { UserPlus, MonitorSpeaker, ClipboardPlus, LogOut } from "lucide-react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { LayoutDashboard, User, Headset, MonitorSpeaker, CreditCard, LogOut } from "lucide-react";
 import Logo from "../assets/logo.png";
+import { useTokenRefresh } from "../hooks/useTokenRefresh"; // 🔹 refresco de token
 
-const navigation = [
-  { section: "Administrador", items: [{ name: "Usuarios", to: "users", icon: UserPlus, color: "blue" }] },
-  { section: "Recepción", items: [{ name: "Recepción", to: "devices-reception", icon: MonitorSpeaker, color: "green" }] },
-  { section: "Técnicos", items: [{ name: "Equipos Asignados", to: "devices-tech", icon: ClipboardPlus, color: "purple" }] },
+const sidebarLinks = [
+  { title: "Super Admin", path: "/dashboard/superadmin", icon: LayoutDashboard },
+  { title: "Usuarios", path: "/dashboard/users", icon: User },
+  { title: "Recepción", path: "/dashboard/reception", icon: MonitorSpeaker },
+  { title: "Técnico", path: "/dashboard/tech", icon: MonitorSpeaker },
+  { title: "Ventas", path: "/dashboard/sales", icon: CreditCard },
+  { title: "Soporte", path: "/dashboard/support", icon: Headset },
 ];
 
-export default function Dashboard() {
-  const [isOpen, setIsOpen] = useState(false);
+export default function DashboardLayout() {
+  const { pathname } = useLocation();
+
+  // 🔹 Hook activo: refresco automático de token cada 15 min
+  useTokenRefresh();
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className={`fixed inset-y-0 left-0 z-40 w-80 bg-white border-r border-gray-200 flex flex-col p-6 transition-transform duration-300 ease-in-out ${isOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}>
-        <div className="p-6 border-b border-gray-100 flex justify-center">
-          <img src={Logo} alt="Logo" className="w-32 h-auto" />
+    <div className="md:flex md:min-h-screen">
+      {/* Sidebar */}
+      <aside className="md:w-64 bg-white shadow flex flex-col px-5 py-6">
+        <div className="flex justify-center mb-6">
+          <img src={Logo} alt="Logo" className="w-28 h-auto" />
         </div>
 
-        <nav className="flex-1 mt-6 space-y-8 overflow-y-auto">
-          {navigation.map((group) => (
-            <div key={group.section}>
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{group.section}</p>
-              <ul className="space-y-1">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.name}>
-                      <NavLink
-                        to={item.to}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200 font-medium text-sm ${isActive ? `bg-${item.color}-50 text-${item.color}-600` : "text-gray-600 hover:bg-gray-50"}`
-                        }
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <Icon size={20} />
-                        <span>{item.name}</span>
-                      </NavLink>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+        <p className="text-xs text-gray-400 mb-2">Administrador</p>
+        <ul className="space-y-2">
+          {sidebarLinks.map(({ title, path, icon: Icon }) => (
+            <li key={path}>
+              <NavLink
+                to={path}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
+                    isActive ? "bg-blue-400 text-black" : "hover:bg-yellow-300 text-black"
+                  }`
+                }
+              >
+                <Icon size={18} /> {title}
+              </NavLink>
+            </li>
           ))}
-        </nav>
+        </ul>
 
-        <div className="p-4 border-t border-gray-100 mt-auto">
-          <NavLink to="/logout" className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50">
-            <LogOut size={20} />
-            <span>Cerrar Sesión</span>
+        <div className="mt-auto pt-4 border-t border-gray-300">
+          <NavLink
+            to="/logout"
+            className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors
+              ${pathname === "/logout" ? "bg-gray-900 text-black" : "hover:bg-red-700 text-black"}`}
+          >
+            <LogOut size={18} /> Cerrar Sesión
           </NavLink>
         </div>
       </aside>
 
-      {isOpen && <div className="fixed inset-0 z-30 bg-neutral opacity-50 md:hidden" onClick={() => setIsOpen(false)} />}
-
-      <main className="flex-1 overflow-y-auto bg-gray-50 p-8">
+      {/* Contenido principal */}
+      <main className="flex-1 bg-gray-100 p-6 overflow-y-auto">
         <Outlet />
       </main>
     </div>

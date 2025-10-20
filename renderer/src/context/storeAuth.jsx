@@ -1,17 +1,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const storeAuth = create(
+const useAuthStore = create(
   persist(
     (set) => ({
-      token: null,    // token final (después de OTP)
-      rol: null,      // rol seleccionado en login
-      setToken: (token) => set({ token }),
-      setRol: (rol) => set({ rol }),
-      clearAuth: () => set({ token: null, rol: null }),
+      user: null,
+      setUser: ({ token, user }) => set({ user: { ...user, token } }),
+      clearAuth: () => set({ user: null }),
     }),
     { name: "auth-token" }
   )
 );
 
-export default storeAuth;
+export default useAuthStore;

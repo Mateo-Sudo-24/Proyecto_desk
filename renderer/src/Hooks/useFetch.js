@@ -2,25 +2,21 @@ import axios from "axios";
 import { useCallback } from "react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import storeAuth from "../context/storeAuth"; // zustand
 
 const MySwal = withReactContent(Swal);
-
-// Solo una URL fija al backend en puerto 4000 o la variable de entorno
-const BASE_URL = import.meta.env.VITE_API_DESK ;
+const BASE_URL = import.meta.env.VITE_API_DESK || "http://localhost:4000/api/";
 
 function useFetch() {
   const fetchDataBackend = useCallback(
-    async (
-      endpoint,
-      data = null,
-      method = "GET",
-      showModals = true
-    ) => {
+    async (endpoint, data = null, method = "GET", showModals = true) => {
+      // 🔹 Obtener token desde Zustand o fallback a localStorage
+      const token = storeAuth.getState().user?.token || localStorage.getItem("userToken");
+
       const url = endpoint.startsWith("/")
-        ? `${BASE_URL}${endpoint.slice(1)}`
+        ? `${BASE_URL}${endpoint.substring(1)}`
         : `${BASE_URL}${endpoint}`;
 
-      const token = localStorage.getItem("token");
       const isFormData = data instanceof FormData;
 
       const headers = {
@@ -42,7 +38,9 @@ function useFetch() {
           method: method.toUpperCase(),
           url,
           headers,
-          ...(method.toUpperCase() !== "GET" && data ? { data } : {}),
+          ...(method.toUpperCase() !== "GET" && data
+            ? { data: isFormData ? data : JSON.stringify(data) }
+            : {}),
         });
 
         if (showModals) {
@@ -50,7 +48,7 @@ function useFetch() {
           await MySwal.fire({
             icon: "success",
             title: "¡Éxito!",
-            text: response?.data?.msg || "Operación completada correctamente",
+            text: response?.data?.msg || response?.data?.message || "Operación completada correctamente",
             confirmButtonText: "OK",
             backdrop: true,
           });
@@ -80,7 +78,7 @@ function useFetch() {
         throw new Error(errorMsg);
       }
     },
-    []
+    [] // ya no depende del contexto
   );
 
   return { fetchDataBackend };

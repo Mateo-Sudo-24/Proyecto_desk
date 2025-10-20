@@ -1,42 +1,25 @@
-// src/pages/DashboardRecepcion.jsx
-import { useEffect, useState } from "react";
-import useReception from "../hooks/useReception";
+import React from "react";
 
-export default function DashboardRecepcion() {
-  const { createClient, registerEquipment, createOrder, equipmentExit } = useReception();
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+// Componentes Recepción
+import ReceptionList from "../components/recepcion/ReceptionList";
+import ReceptionForm from "../components/recepcion/ReceptionForm";
+import ReceptionStats from "../components/recepcion/ReceptionStats";
 
-  // Ejemplo: cargar clientes
-  const loadClients = async () => {
-    try {
-      const res = await fetch("http://localhost:4000/api/employee/receptionist/clients");
-      if (!res.ok) throw new Error("Error al obtener clientes");
-      const data = await res.json();
-      setClients(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadClients();
-  }, []);
-
+const DashboardRecepcion = () => {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Recepción</h1>
-      {loading ? (
-        <p>Cargando clientes...</p>
-      ) : (
-        <ul className="space-y-2">
-          {clients.map((c) => (
-            <li key={c.id} className="p-2 border rounded">{c.nombre}</li>
-          ))}
-        </ul>
-      )}
+    <div className="p-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Lista de clientes y equipos ocupa 2 columnas en pantallas grandes */}
+      <div className="col-span-1 md:col-span-2">
+        <ReceptionList />
+      </div>
+
+      {/* Formulario para registrar clientes y equipos */}
+      <ReceptionForm />
+
+      {/* Estadísticas del área de recepción */}
+      <ReceptionStats />
     </div>
   );
-}
+};
+
+export default DashboardRecepcion;
