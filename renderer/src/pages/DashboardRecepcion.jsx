@@ -4,6 +4,7 @@ import React from "react";
 import ReceptionList from "../components/recepcion/ReceptionList";
 import ReceptionForm from "../components/recepcion/ReceptionForm";
 import ReceptionStats from "../components/recepcion/ReceptionStats";
+import CreateServiceOrder from "../components/recepcion/CreateServiceOrder";
 
 const DashboardRecepcion = () => {
   return (
@@ -15,6 +16,9 @@ const DashboardRecepcion = () => {
 
       {/* Formulario para registrar clientes y equipos */}
       <ReceptionForm />
+
+      {/* Formulario para crear órdenes de servicio. */}
+      <CreateServiceOrder />
 
       {/* Estadísticas del área de recepción */}
       <ReceptionStats />
