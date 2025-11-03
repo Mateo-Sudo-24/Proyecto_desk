@@ -177,21 +177,20 @@ async function updateOrderStatusAndHistory(orderId, newStatusId, notes, userId =
  * @route GET /api/employee/search/clients
  */
 export const searchClients = asyncHandler(async (req, res) => {
-  const { search, clientTypeId, limit = 50 } = req.query;
+  const { search, clientTypeId, limit } = req.query; // ya validados por Zod
 
   const where = {};
-
   if (search) {
     where.OR = [
-      { DisplayName: { contains: search, mode: 'insensitive' } },
-      { IdNumber: { contains: search, mode: 'insensitive' } },
-      { Email: { contains: search, mode: 'insensitive' } },
-      { OrganizationName: { contains: search, mode: 'insensitive' } }
+      { DisplayName: { contains: search, mode: "insensitive" } },
+      { IdNumber: { contains: search, mode: "insensitive" } },
+      { Email: { contains: search, mode: "insensitive" } },
+      { OrganizationName: { contains: search, mode: "insensitive" } }
     ];
   }
 
   if (clientTypeId) {
-    where.ClientTypeId = toNumber(clientTypeId, 'clientTypeId');
+    where.ClientTypeId = clientTypeId;
   }
 
   const clients = await prisma.client.findMany({
@@ -207,49 +206,46 @@ export const searchClients = asyncHandler(async (req, res) => {
       ContactName: true,
       IsPublicService: true
     },
-    orderBy: { DisplayName: 'asc' },
-    take: parseInt(limit)
+    orderBy: { DisplayName: "asc" },
+    take: limit
   });
 
   res.json({
     success: true,
-    message: 'Clientes encontrados',
+    message: "Clientes encontrados",
     data: { clients, count: clients.length }
   });
 });
-
 /**
  * Lista técnicos disponibles
  * @route GET /api/employee/technicians
  */
 export const listTechnicians = asyncHandler(async (req, res) => {
-  const technicians = await prisma.user.findMany({
-    where: {
-      Active: true,
-      userRoles: {
-        some: {
-          role: {
-            Name: 'TECHNICIAN'
-          }
+ const technicians = await prisma.user.findMany({
+  where: {
+    Active: true,
+    userRoles: {
+      some: {
+        role: {
+          Name: 'Staff Técnico' // <-- corregido
         }
       }
-    },
-    select: {
-      UserId: true,
-      Username: true,
-      Email: true,
-      FirstName: true,
-      LastName: true
-    },
-    orderBy: { Username: 'asc' }
-  });
-
+    }
+  },
+  select: {
+    UserId: true,
+    Username: true,
+    Email: true
+  },
+  orderBy: { Username: 'asc' }
+});
   res.json({
     success: true,
     message: 'Técnicos disponibles',
     data: { technicians, count: technicians.length }
   });
 });
+
 
 /**
  * Lista equipos de un cliente específico
@@ -258,17 +254,12 @@ export const listTechnicians = asyncHandler(async (req, res) => {
 export const listClientEquipments = asyncHandler(async (req, res) => {
   const { clientId } = req.params;
 
+  // Convertir clientId a número si viene como string
   const clientIdNum = toNumber(clientId, 'clientId');
 
   const equipments = await prisma.equipment.findMany({
-    where: { ClientId: clientIdNum },
-    include: {
-      equipmentType: {
-        select: {
-          EquipmentTypeId: true,
-          TypeName: true
-        }
-      }
+    where: {
+      ClientId: clientIdNum, // <-- Usar número
     },
     select: {
       EquipmentId: true,
@@ -276,9 +267,17 @@ export const listClientEquipments = asyncHandler(async (req, res) => {
       Model: true,
       SerialNumber: true,
       Description: true,
-      CreatedAt: true
+      CreatedAt: true,
+      equipmentType: {
+        select: {
+          EquipmentTypeId: true,
+          Name: true, // <-- CORREGIDO: antes TypeName
+        },
+      },
     },
-    orderBy: { CreatedAt: 'desc' }
+    orderBy: {
+      CreatedAt: "desc",
+    },
   });
 
   res.json({
@@ -295,39 +294,52 @@ export const listClientEquipments = asyncHandler(async (req, res) => {
  * @route POST /api/receptionist/client
  */
 export const receptionistCreateOrUpdateClient = asyncHandler(async (req, res) => {
-  const { 
-    clientId, clientTypeId, displayName, idNumber, email, 
-    phone, address, contactName, isPublicService, 
-    organizationName, deliveryAddress 
-  } = req.body;
-
-  // Validar campos requeridos
-  const requiredFields = ['clientTypeId', 'displayName'];
-  validateRequiredFields(req.body, requiredFields);
-
-  const isNew = !clientId;
-  
-  const clientData = {
-    clientId: isNew ? undefined : toNumber(clientId, 'clientId'),
-    clientTypeId: toNumber(clientTypeId, 'clientTypeId'),
+  const {
+    clientId,
+    clientTypeId,
     displayName,
     idNumber,
     email,
     phone,
     address,
     contactName,
-    isPublicService: Boolean(isPublicService),
+    isPublicService,
     organizationName,
     deliveryAddress
+  } = req.body;
+
+  // Validar campos obligatorios
+  validateRequiredFields(req.body, ['clientTypeId', 'displayName']);
+
+  const clientData = {
+    clientId: clientId ? toNumber(clientId, 'clientId') : undefined,
+    clientTypeId: toNumber(clientTypeId, 'clientTypeId'),
+    displayName: displayName?.trim(),
+    idNumber: idNumber?.trim(),
+    email: email?.trim(),
+    phone: phone?.trim(),
+    address: address?.trim(),
+    contactName: contactName?.trim(),
+    isPublicService: Boolean(isPublicService),
+    organizationName: organizationName?.trim(),
+    deliveryAddress: deliveryAddress?.trim()
   };
 
-  const client = await createOrUpdateClient(clientData, isNew);
+  const isNew = !clientId;
 
-  res.status(isNew ? 201 : 200).json({ 
-    success: true,
-    message: `Cliente ${isNew ? 'creado' : 'actualizado'} con éxito.`, 
-    data: { client } 
-  });
+  try {
+    const client = await createOrUpdateClient(clientData, isNew);
+    res.status(isNew ? 201 : 200).json({
+      success: true,
+      message: `Cliente ${isNew ? 'creado' : 'actualizado'} con éxito.`,
+      data: { client }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Error al procesar cliente'
+    });
+  }
 });
 
 /**
@@ -361,51 +373,64 @@ export const receptionistRegisterEquipment = asyncHandler(async (req, res) => {
  */
 export const receptionistCreateOrder = asyncHandler(async (req, res) => {
   const { clientId, equipmentId, notes, estimatedDeliveryDate, technicianId } = req.body;
-  const receptionistId = req.session.userId;
 
+  // Asegúrate de obtener el ID del recepcionista desde la sesión o JWT
+  const receptionistId = req.session.userId || 1; // solo para pruebas en produccion borra el 1
+  if (!receptionistId) {
+    return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+  }
+
+  // Validar campos obligatorios
   validateRequiredFields(req.body, ['clientId', 'equipmentId']);
 
-  const receivedStatus = await getStatusByCode(STATUS_CODES.RECEIVED);
+  // Obtener el estado "RECIBIDO" desde la DB
+  const receivedStatus = await getStatusByCode('RECIBIDO'); // o tu constante STATUS_CODES.RECEIVED
+  if (!receivedStatus) {
+    return res.status(500).json({ success: false, message: 'Estado "RECIBIDO" no configurado en la DB' });
+  }
 
-  // Usar transacción para garantizar atomicidad
-  const result = await prisma.$transaction(async (tx) => {
-    const order = await tx.serviceOrder.create({
-      data: {
-        ClientId: toNumber(clientId, 'clientId'),
-        EquipmentId: toNumber(equipmentId, 'equipmentId'),
-        ReceptionistId: receptionistId,
-        TechnicianId: technicianId ? toNumber(technicianId, 'technicianId') : null,
-        IdentityTag: `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        CurrentStatusId: receivedStatus.StatusId,
-        Notes: notes || '',
-        EstimatedDeliveryDate: estimatedDeliveryDate ? new Date(estimatedDeliveryDate) : null,
-      }
-    });
-
-    await tx.equipmentEntry.create({
-      data: {
-        OrderId: order.OrderId,
-        ReceivedByUserId: receptionistId,
-        Notes: `Equipo recibido para la orden ${order.IdentityTag}.`
-      }
-    });
-
-    await tx.orderStatusHistory.create({
-      data: {
-        OrderId: order.OrderId,
-        StatusId: receivedStatus.StatusId,
-        Notes: 'Orden creada y equipo recibido.',
-        ChangedByUserId: receptionistId,
-      }
-    });
-
-    return order;
+  // Transacción para crear orden, entrada de equipo y historial
+ const order = await prisma.$transaction(async (tx) => {
+  // Crear la orden
+  const newOrder = await tx.serviceOrder.create({
+    data: {
+      ClientId: toNumber(clientId, 'clientId'),
+      EquipmentId: toNumber(equipmentId, 'equipmentId'),
+      ReceptionistId: receptionistId,
+      TechnicianId: technicianId ? toNumber(technicianId, 'technicianId') : null,
+      IdentityTag: `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      CurrentStatusId: receivedStatus.StatusId,
+      Notes: notes || '',
+      EstimatedDeliveryDate: estimatedDeliveryDate ? new Date(estimatedDeliveryDate) : null,
+    },
   });
 
-  res.status(201).json({ 
+  // Registrar entrada del equipo
+  await tx.equipmentEntry.create({
+    data: {
+      OrderId: newOrder.OrderId,
+      ReceivedByUserId: receptionistId,
+      Notes: `Equipo recibido para la orden ${newOrder.IdentityTag}.`,
+    },
+  });
+
+  // Registrar historial de estado
+  await tx.orderStatusHistory.create({
+    data: {
+      OrderId: newOrder.OrderId,
+      StatusId: receivedStatus.StatusId,
+      Notes: 'Orden creada y equipo recibido.',
+      ChangedByUserId: receptionistId,
+    },
+  });
+
+  return newOrder;
+});
+
+  res.status(201).json({
     success: true,
-    message: 'Orden y entrada de equipo registradas con éxito.', 
-    data: { order: result } 
+    message: 'Orden y entrada de equipo registradas con éxito.',
+    data: { order },
   });
 });
 
@@ -854,6 +879,8 @@ export const employeeLogin = asyncHandler(async (req, res) => {
   req.session.userId = user.UserId;
   req.session.username = user.Username;
   req.session.roles = user.userRoles.map(ur => ur.role.Name);
+  // Guardar sesión explícitamente
+  await req.session.save();
 
   res.json({ 
     success: true,

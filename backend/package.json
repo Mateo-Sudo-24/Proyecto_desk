@@ -31,6 +31,7 @@
   },
   "scripts": {
     "dev": "nodemon src/server.js",
-    "migrate": "prisma migrate dev"
+    "migrate": "prisma migrate dev",
+    "seed": "node prisma/seed.js"
   }
 }

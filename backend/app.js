@@ -94,7 +94,7 @@ app.use(httpLogger);
 
 // --- Configuración de Sesión (SOLO PARA CLIENTES WEB) ---
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'a-very-strong-secret-for-clients',
+  secret: process.env.SESSION_SECRET || 'a-very-strong-secret-for-clients', // cambia esto en producción
   resave: false,
   saveUninitialized: false,
   name: 'sessionId', // Ocultar que usas express-session

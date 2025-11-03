@@ -31,25 +31,36 @@ const ReceptionForm = () => {
   // Observamos el tipo de cliente
   const clientType = watch("clientTypeId"); // 1 = Empresa, 2 = Persona Natural
 
-  const onSubmit = async (data) => {
-    try {
-      const res = await fetchDataBackend(
-        "/employee/receptionist/client",
-        data,
-        "POST"
-      );
+const onSubmit = async (data) => {
+  try {
+    const payload = {
+      clientTypeId: Number(data.clientTypeId), // string a number
+      displayName: data.clientTypeId === "2" ? data.displayName : undefined,
+      organizationName: data.clientTypeId === "1" ? data.organizationName : undefined,
+      idNumber: data.idNumber || undefined,
+      email: data.email || undefined,
+      phone: data.phone || undefined,
+      address: data.address || undefined,
+      contactName: data.contactName || undefined,
+      isPublicService: !!data.isPublicService, // checkbox a boolean
+      deliveryAddress: data.deliveryAddress || undefined,
+    };
 
-      if (res.success) {
-        Swal.fire("Éxito", "Cliente guardado correctamente", "success");
-        reset(); // Limpiar formulario
-      } else {
-        Swal.fire("Error", res.message || "Error al guardar cliente", "error");
-      }
-    } catch (error) {
-      console.error(error);
-      Swal.fire("Error", "Error de conexión con el servidor", "error");
-    }
-  };
+    console.log("Payload enviado:", payload); // 🔹 revisa en consola
+
+    const res = await fetchDataBackend(
+      "/employee/receptionist/client",
+      payload,
+      "POST"
+    );
+
+    console.log("Respuesta backend:", res);
+
+  } catch (error) {
+    console.error("Error al enviar cliente:", error);
+  }
+};
+
 
   return (
     <div className="space-y-6">

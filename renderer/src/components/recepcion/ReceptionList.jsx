@@ -109,7 +109,7 @@ const ReceptionList = () => {
         </table>
       </div>
 
-      <h2 className="text-xl font-semibold text-gray-800 mt-6">Lista de equipos</h2>
+      {/*<h2 className="text-xl font-semibold text-gray-800 mt-6">Lista de equipos</h2>
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-left">
           <thead className="bg-gray-100">
@@ -141,7 +141,7 @@ const ReceptionList = () => {
             )}
           </tbody>
         </table>
-      </div>
+      </div>*/}
     </div>
   );
 };

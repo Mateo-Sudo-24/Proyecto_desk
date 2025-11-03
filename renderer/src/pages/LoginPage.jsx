@@ -1,3 +1,4 @@
+// src/pages/LoginPage.jsx
 import { LogIn } from "lucide-react";
 import Logo from "../assets/logo.png";
 import { useForm } from "react-hook-form";
@@ -11,72 +12,50 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors } } = useForm();
   const { fetchDataBackend } = useFetch();
-  const { setUser } = storeAuth(); // token + usuario completo
+  const { setUser } = storeAuth();
 
-  const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const loginUser = async (dataForm) => {
-    setErrorMessage("");
-    setLoading(true);
+  setLoading(true);
+  try {
+    const url = "/auth/login";
+    const payload = { workId: dataForm.email, password: dataForm.password };
+    const response = await fetchDataBackend(url, payload, "POST", false);
 
-    try {
-      // Endpoint general que controla todos los roles
-      const url = "/auth/login"; 
-      const payload = {
-        workId: dataForm.email,
-        password: dataForm.password,
-      };
+    if (response?.success && response?.data) {
+      // Guardamos token + usuario completo incluyendo roles
+      setUser({ token: response.data.token, user: response.data.user });
 
-      const response = await fetchDataBackend(url, payload, "POST", false);
-
-      if (response?.success && response?.data) {
-        // Guardamos token + info
-        setUser({
-          token: response.data.token,
-          user: response.data.user,
-        });
-
-        // 🔹 Redirige según rol
-        const roles = response.data.user.roles.map(r => r.toLowerCase());
-        if (roles.includes("admin")) navigate("/dashboard"); // superadmin
-        else if (roles.includes("recepcion")) navigate("/dashboard/recepcion");
-        else if (roles.includes("tecnico")) navigate("/dashboard/tecnico");
-        else if (roles.includes("ventas")) navigate("/dashboard/ventas");
-        else navigate("/dashboard"); // fallback
-      } else {
-        Swal.fire("Error", response?.error || "Credenciales inválidas", "error");
-      }
-    } catch (error) {
-      console.error("Error al iniciar sesión:", error);
-      Swal.fire("Error", error.message, "error");
-    } finally {
-      setLoading(false);
+      // Redirige automáticamente según rol
+      const roles = response.data.user.roles?.map(r => r.toLowerCase()) || [];
+      if (roles.includes("superadmin") || roles.includes("admin")) navigate("/dashboard/superadmin");
+      else if (roles.includes("recepcionista")) navigate("/dashboard/reception");
+      else if (roles.includes("tecnico")) navigate("/dashboard/tech");
+      else if (roles.includes("ventas")) navigate("/dashboard/sales");
+      else navigate("/dashboard");
+    } else {
+      Swal.fire("Error", response?.error || "Credenciales inválidas", "error");
     }
-  };
+  } catch (error) {
+    Swal.fire("Error", error.message || "Error de conexión", "error");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen flex">
-      {/* Lado izquierdo: logo gris/blanco */}
       <div className="hidden md:flex w-1/2 bg-gray-100 items-center justify-center">
         <img src={Logo} alt="Logo" className="w-3/4" />
       </div>
 
-      {/* Lado derecho: formulario */}
       <div className="flex flex-1 items-center justify-center bg-gray-50">
         <div className="w-full max-w-md p-8 bg-white shadow-xl rounded-lg">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-            Iniciar sesión - Super Admin
-          </h1>
-
-          {errorMessage && (
-            <p className="bg-red-100 text-red-800 p-2 rounded mb-4 text-center">
-              {errorMessage}
-            </p>
-          )}
+          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Iniciar sesión</h1>
 
           <form className="space-y-5" onSubmit={handleSubmit(loginUser)}>
-            {/* Work ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Work ID <span className="text-red-800">*</span>
@@ -90,7 +69,6 @@ const LoginPage = () => {
               {errors.email && <p className="text-red-800">{errors.email.message}</p>}
             </div>
 
-            {/* Contraseña */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Contraseña <span className="text-red-800">*</span>
@@ -104,7 +82,6 @@ const LoginPage = () => {
               {errors.password && <p className="text-red-800">{errors.password.message}</p>}
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}

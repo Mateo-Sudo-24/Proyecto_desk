@@ -1,267 +1,240 @@
-// schema.prisma
-datasource db {
-  provider = "sqlserver"
-  url      = env("DATABASE_URL") // "sqlserver://user:password@localhost:1433;database=EcuatechnologyDB;trustServerCertificate=true"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-model Role {
-  RoleId      Int      @id @default(autoincrement()) @map("RoleId")
-  Name        String   @unique @map("Name")
-  Description String?  @map("Description")
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
 
+model Role {
+  RoleId      Int        @id @default(autoincrement()) @map("RoleId")
+  Name        String     @unique @map("Name")
+  Description String?    @map("Description")
   userRoles   UserRole[]
-  
+
   @@map("security.Roles")
 }
 
 model User {
-  UserId       Int       @id @default(autoincrement()) @map("UserId")
-  Username     String    @unique @map("Username")
-  PasswordHash String    @map("PasswordHash")
-  Email        String?   @map("Email")
-  Phone        String?   @map("Phone")
-  Active       Boolean   @default(true) @map("Active")
-  CreatedAt    DateTime  @default(now()) @map("CreatedAt")
-  tickets          Ticket[] @relation("TicketAssignee")
-  ticketResponses  TicketResponse[] @relation("TicketResponder")
-
-  userRoles           UserRole[]
-  receptionistOrders  ServiceOrder[] @relation("ReceptionistOrders")
-  technicianOrders    ServiceOrder[] @relation("TechnicianOrders")
-  otps                OTP[]
-  // Nuevas relaciones agregadas
-  equipmentEntries    EquipmentEntry[] @relation("EntryReceiver")
-  equipmentExits      EquipmentExit[] @relation("ExitDeliverer")
-  statusChanges       OrderStatusHistory[] @relation("StatusChanger")
+  UserId             Int                  @id @default(autoincrement()) @map("UserId")
+  Username           String               @unique @map("Username")
+  PasswordHash       String               @map("PasswordHash")
+  Email              String?              @map("Email")
+  Phone              String?              @map("Phone")
+  Active             Boolean              @default(true) @map("Active")
+  CreatedAt          DateTime             @default(now()) @map("CreatedAt")
+  equipmentEntries   EquipmentEntry[]     @relation("EntryReceiver")
+  equipmentExits     EquipmentExit[]      @relation("ExitDeliverer")
+  statusChanges      OrderStatusHistory[] @relation("StatusChanger")
+  receptionistOrders ServiceOrder[]       @relation("ReceptionistOrders")
+  technicianOrders   ServiceOrder[]       @relation("TechnicianOrders")
+  otps               OTP[]
+  userRoles          UserRole[]
+  ticketResponses    TicketResponse[]     @relation("TicketResponder")
+  tickets            Ticket[]             @relation("TicketAssignee")
 
   @@map("security.Users")
 }
 
 model UserRole {
-  UserId Int @map("UserId")
-  RoleId Int @map("RoleId")
-
-  user User @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
-  role Role @relation(fields: [RoleId], references: [RoleId], onDelete: Cascade, onUpdate: NoAction)
+  UserId Int  @map("UserId")
+  RoleId Int  @map("RoleId")
+  role   Role @relation(fields: [RoleId], references: [RoleId], onDelete: Cascade, onUpdate: NoAction)
+  user   User @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([UserId, RoleId])
   @@map("security.UserRoles")
 }
 
-// New OTP model for better management
 model OTP {
-  OTPId      Int      @id @default(autoincrement()) @map("OTPId")
-  UserId     Int      @map("UserId")
-  Code       String   @map("Code")
-  ExpiresAt  DateTime @map("ExpiresAt")
-  IsUsed     Boolean  @default(false) @map("IsUsed")
-  CreatedAt  DateTime @default(now()) @map("CreatedAt")
-
-  user User @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
+  OTPId     Int      @id @default(autoincrement()) @map("OTPId")
+  UserId    Int      @map("UserId")
+  Code      String   @map("Code")
+  ExpiresAt DateTime @map("ExpiresAt")
+  IsUsed    Boolean  @default(false) @map("IsUsed")
+  CreatedAt DateTime @default(now()) @map("CreatedAt")
+  user      User     @relation(fields: [UserId], references: [UserId], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("security.OTPs")
 }
 
 model ClientType {
-  ClientTypeId Int     @id @default(autoincrement()) @map("ClientTypeId")
-  Code         String  @unique @map("Code")
-  Name         String  @map("Name")
-
+  ClientTypeId Int      @id @default(autoincrement()) @map("ClientTypeId")
+  Code         String   @unique @map("Code")
+  Name         String   @map("Name")
   clients      Client[]
-  
+
   @@map("core.ClientTypes")
 }
 
 model Client {
-  ClientId        Int      @id @default(autoincrement()) @map("ClientId")
-  ClientTypeId    Int      @map("ClientTypeId")
-  DisplayName     String   @map("DisplayName")
-  IdNumber        String   @unique @map("IdNumber")
-  Email           String?  @unique @map("Email")
-  Phone           String?  @map("Phone")
-  Address         String?  @map("Address")
-  ContactName     String?  @map("ContactName")
-  CreatedAt       DateTime @default(now()) @map("CreatedAt")
-  tickets          Ticket[]
+  ClientId         Int              @id @default(autoincrement()) @map("ClientId")
+  ClientTypeId     Int              @map("ClientTypeId")
+  DisplayName      String           @map("DisplayName")
+  IdNumber         String           @unique @map("IdNumber")
+  Email            String?          @unique @map("Email")
+  Phone            String?          @map("Phone")
+  Address          String?          @map("Address")
+  ContactName      String?          @map("ContactName")
+  CreatedAt        DateTime         @default(now()) @map("CreatedAt")
+  IsPublicService  Boolean          @default(false) @map("IsPublicService")
+  OrganizationName String?          @map("OrganizationName")
+  DeliveryAddress  String?          @map("DeliveryAddress")
+  PasswordHash     String?          @map("PasswordHash")
+  ConfirmToken     String?          @map("ConfirmToken")
+  IsEmailVerified  Boolean          @default(false) @map("IsEmailVerified")
+  OTP              String?          @map("OTP")
+  OTPExpires       DateTime?        @map("OTPExpires")
+  clientType       ClientType       @relation(fields: [ClientTypeId], references: [ClientTypeId], onUpdate: NoAction)
+  equipments       Equipment[]
+  serviceOrders    ServiceOrder[]
   ticketResponses  TicketResponse[]
-  
-  IsPublicService Boolean  @default(false) @map("IsPublicService")
-  OrganizationName String? @map("OrganizationName")
-  DeliveryAddress String? @map("DeliveryAddress")
-
-  // Campos de autenticación
-  PasswordHash    String?   @map("PasswordHash")  // Cambiado de Bytes? a String?
-  ConfirmToken    String?   @map("ConfirmToken")
-  IsEmailVerified Boolean   @default(false) @map("IsEmailVerified")
-  OTP             String?   @map("OTP")
-  OTPExpires      DateTime? @map("OTPExpires")
-
-  clientType      ClientType @relation(fields: [ClientTypeId], references: [ClientTypeId], onDelete: NoAction, onUpdate: NoAction)
-  equipments      Equipment[]
-  serviceOrders   ServiceOrder[]
+  tickets          Ticket[]
 
   @@map("core.Clients")
 }
 
 model EquipmentType {
-  EquipmentTypeId Int    @id @default(autoincrement()) @map("EquipmentTypeId")
-  Name            String @unique @map("Name")
-
-  equipments Equipment[]
+  EquipmentTypeId Int         @id @default(autoincrement()) @map("EquipmentTypeId")
+  Name            String      @unique @map("Name")
+  equipments      Equipment[]
 
   @@map("core.EquipmentTypes")
 }
 
 model Equipment {
-  EquipmentId     Int     @id @default(autoincrement()) @map("EquipmentId")
-  ClientId        Int     @map("ClientId")
-  EquipmentTypeId Int     @map("EquipmentTypeId")
-  Brand           String? @map("Brand")
-  Model           String? @map("Model")
-  SerialNumber    String? @map("SerialNumber")
-  Description     String? @map("Description")
-  CreatedAt       DateTime @default(now()) @map("CreatedAt")
-
-  client        Client        @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
-  equipmentType EquipmentType @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId], onDelete: NoAction, onUpdate: NoAction)
-  serviceOrders ServiceOrder[]
+  EquipmentId     Int            @id @default(autoincrement()) @map("EquipmentId")
+  ClientId        Int            @map("ClientId")
+  EquipmentTypeId Int            @map("EquipmentTypeId")
+  Brand           String?        @map("Brand")
+  Model           String?        @map("Model")
+  SerialNumber    String?        @map("SerialNumber")
+  Description     String?        @map("Description")
+  CreatedAt       DateTime       @default(now()) @map("CreatedAt")
+  client          Client         @relation(fields: [ClientId], references: [ClientId], onUpdate: NoAction)
+  equipmentType   EquipmentType  @relation(fields: [EquipmentTypeId], references: [EquipmentTypeId], onUpdate: NoAction)
+  serviceOrders   ServiceOrder[]
 
   @@map("core.Equipments")
 }
 
 model Status {
-  StatusId   Int     @id @default(autoincrement()) @map("StatusId")
-  Code       String  @unique @map("Code")
-  Name       String  @map("Name")
-  SortOrder  Int     @map("SortOrder")
-  IsTerminal Boolean @default(false) @map("IsTerminal")
-
-  serviceOrders ServiceOrder[]
+  StatusId      Int                  @id @default(autoincrement()) @map("StatusId")
+  Code          String               @unique @map("Code")
+  Name          String               @map("Name")
+  SortOrder     Int                  @map("SortOrder")
+  IsTerminal    Boolean              @default(false) @map("IsTerminal")
   histories     OrderStatusHistory[]
+  serviceOrders ServiceOrder[]
 
   @@map("ops.Status")
 }
 
 model ServiceOrder {
-  OrderId        Int      @id @default(autoincrement()) @map("OrderId")
-  ClientId       Int      @map("ClientId")
-  EquipmentId    Int      @map("EquipmentId")
-  ReceptionistId Int      @map("ReceptionistId")
-  TechnicianId   Int?     @map("TechnicianId")
-  IntakeDate     DateTime @default(now()) @map("IntakeDate")
-  IdentityTag    String   @unique @map("IdentityTag")
-  CurrentStatusId Int     @map("CurrentStatusId")
-  Diagnosis      String?  @map("Diagnosis")
-  ProformaStatus String?  @default("pendiente") @map("ProformaStatus")
-  ProformaSentDate DateTime? @map("ProformaSentDate")
-  ProformaApprovalDate DateTime? @map("ProformaApprovalDate")
-  Parts          String?  @map("Parts")
-  TotalPrice     Float?   @map("TotalPrice") @db.Money // Cambiado de Decimal? a Float?
-  Notes          String?  @map("Notes")
-  EstimatedDeliveryDate DateTime? @map("EstimatedDeliveryDate")
-  ServiceStartDate DateTime? @map("ServiceStartDate")
-  ServiceEndDate   DateTime? @map("ServiceEndDate")
-  tickets          Ticket[]
-
-  client       Client   @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
-  equipment    Equipment @relation(fields: [EquipmentId], references: [EquipmentId], onDelete: NoAction, onUpdate: NoAction)
-  receptionist User     @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
-  technician   User?    @relation("TechnicianOrders", fields: [TechnicianId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
-  status       Status   @relation(fields: [CurrentStatusId], references: [StatusId], onDelete: NoAction, onUpdate: NoAction)
-  
-  histories    OrderStatusHistory[]
-  // Nuevas relaciones inversas agregadas
-  equipmentEntry EquipmentEntry?
-  equipmentExit  EquipmentExit?
+  OrderId               Int                  @id @default(autoincrement()) @map("OrderId")
+  ClientId              Int                  @map("ClientId")
+  EquipmentId           Int                  @map("EquipmentId")
+  ReceptionistId        Int                  @map("ReceptionistId")
+  TechnicianId          Int?                 @map("TechnicianId")
+  IntakeDate            DateTime             @default(now()) @map("IntakeDate")
+  IdentityTag           String               @unique @map("IdentityTag")
+  CurrentStatusId       Int                  @map("CurrentStatusId")
+  Diagnosis             String?              @map("Diagnosis")
+  ProformaStatus        String?              @default("pendiente") @map("ProformaStatus")
+  ProformaSentDate      DateTime?            @map("ProformaSentDate")
+  ProformaApprovalDate  DateTime?            @map("ProformaApprovalDate")
+  Parts                 String?              @map("Parts")
+  TotalPrice            Float?               @map("TotalPrice") @db.Money
+  Notes                 String?              @map("Notes")
+  EstimatedDeliveryDate DateTime?            @map("EstimatedDeliveryDate")
+  ServiceStartDate      DateTime?            @map("ServiceStartDate")
+  ServiceEndDate        DateTime?            @map("ServiceEndDate")
+  equipmentEntry        EquipmentEntry?
+  equipmentExit         EquipmentExit?
+  histories             OrderStatusHistory[]
+  client                Client               @relation(fields: [ClientId], references: [ClientId], onUpdate: NoAction)
+  status                Status               @relation(fields: [CurrentStatusId], references: [StatusId], onUpdate: NoAction)
+  equipment             Equipment            @relation(fields: [EquipmentId], references: [EquipmentId], onUpdate: NoAction)
+  receptionist          User                 @relation("ReceptionistOrders", fields: [ReceptionistId], references: [UserId], onUpdate: NoAction)
+  technician            User?                @relation("TechnicianOrders", fields: [TechnicianId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  tickets               Ticket[]
 
   @@map("ops.ServiceOrders")
 }
 
 model OrderStatusHistory {
-  HistoryId   Int      @id @default(autoincrement()) @map("HistoryId")
-  OrderId     Int      @map("OrderId")
-  StatusId    Int      @map("StatusId")
-  ChangedAt   DateTime @default(now()) @map("ChangedAt")
-  Notes       String?  @map("Notes")
-  ChangedByUserId Int? @map("ChangedByUserId")
-
-  order     ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
-  status    Status       @relation(fields: [StatusId], references: [StatusId], onDelete: NoAction, onUpdate: NoAction)
-  changedBy User?        @relation("StatusChanger", fields: [ChangedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  HistoryId       Int          @id @default(autoincrement()) @map("HistoryId")
+  OrderId         Int          @map("OrderId")
+  StatusId        Int          @map("StatusId")
+  ChangedAt       DateTime     @default(now()) @map("ChangedAt")
+  Notes           String?      @map("Notes")
+  ChangedByUserId Int?         @map("ChangedByUserId")
+  changedBy       User?        @relation("StatusChanger", fields: [ChangedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  order           ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
+  status          Status       @relation(fields: [StatusId], references: [StatusId], onUpdate: NoAction)
 
   @@map("ops.OrderStatusHistory")
 }
 
 model EquipmentEntry {
-  EntryId     Int      @id @default(autoincrement()) @map("EntryId")
-  OrderId     Int      @unique @map("OrderId")
-  EnteredAt   DateTime @default(now()) @map("EnteredAt")
-  ReceivedByUserId Int @map("ReceivedByUserId")
-  Notes       String?  @map("Notes")
-
-  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
-  receivedBy  User @relation("EntryReceiver", fields: [ReceivedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  EntryId          Int          @id @default(autoincrement()) @map("EntryId")
+  OrderId          Int          @unique @map("OrderId")
+  EnteredAt        DateTime     @default(now()) @map("EnteredAt")
+  ReceivedByUserId Int          @map("ReceivedByUserId")
+  Notes            String?      @map("Notes")
+  order            ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
+  receivedBy       User         @relation("EntryReceiver", fields: [ReceivedByUserId], references: [UserId], onUpdate: NoAction)
 
   @@map("ops.EquipmentEntries")
 }
 
 model EquipmentExit {
-  ExitId      Int      @id @default(autoincrement()) @map("ExitId")
-  OrderId     Int      @unique @map("OrderId")
-  ExitedAt    DateTime @default(now()) @map("ExitedAt")
-  DeliveredByUserId Int @map("DeliveredByUserId")
-  ReceivedByClientName String? @map("ReceivedByClientName")
-  Notes       String?  @map("Notes")
-
-  order       ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
-  deliveredBy User @relation("ExitDeliverer", fields: [DeliveredByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  ExitId               Int          @id @default(autoincrement()) @map("ExitId")
+  OrderId              Int          @unique @map("OrderId")
+  ExitedAt             DateTime     @default(now()) @map("ExitedAt")
+  DeliveredByUserId    Int          @map("DeliveredByUserId")
+  ReceivedByClientName String?      @map("ReceivedByClientName")
+  Notes                String?      @map("Notes")
+  deliveredBy          User         @relation("ExitDeliverer", fields: [DeliveredByUserId], references: [UserId], onUpdate: NoAction)
+  order                ServiceOrder @relation(fields: [OrderId], references: [OrderId], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("ops.EquipmentExits")
 }
 
-// Agregar estos modelos a tu schema.prisma existente
-
-// === SISTEMA DE TICKETS DE SOPORTE ===
-
 model TicketCategory {
-  CategoryId  Int     @id @default(autoincrement()) @map("CategoryId")
-  Code        String  @unique @map("Code")
-  Name        String  @map("Name")
-  Description String? @map("Description")
-  
-  tickets Ticket[]
-  
+  CategoryId  Int      @id @default(autoincrement()) @map("CategoryId")
+  Code        String   @unique @map("Code")
+  Name        String   @map("Name")
+  Description String?  @map("Description")
+  tickets     Ticket[]
+
   @@map("support.TicketCategories")
 }
 
 model Ticket {
-  TicketId     Int      @id @default(autoincrement()) @map("TicketId")
-  TicketNumber String   @unique @default(cuid()) @map("TicketNumber")
-  ClientId     Int?     @map("ClientId")
-  OrderId      Int?     @map("OrderId")
-  CategoryId   Int      @map("CategoryId")
-  Subject      String   @map("Subject")
-  Description  String   @map("Description") @db.Text
-  Priority     String   @default("normal") @map("Priority") // low, normal, high, urgent
-  Status       String   @default("open") @map("Status") // open, assigned, in_progress, resolved, closed
-  AssignedToUserId Int? @map("AssignedToUserId")
-  CreatedAt    DateTime @default(now()) @map("CreatedAt")
-  UpdatedAt    DateTime @updatedAt @map("UpdatedAt")
-  ResolvedAt   DateTime? @map("ResolvedAt")
-  ClosedAt     DateTime? @map("ClosedAt")
-  CreatedBy    String   @map("CreatedBy") // 'client' o 'employee'
-  
-  client       Client?       @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
-  order        ServiceOrder? @relation(fields: [OrderId], references: [OrderId], onDelete: NoAction, onUpdate: NoAction)
-  category     TicketCategory @relation(fields: [CategoryId], references: [CategoryId], onDelete: NoAction, onUpdate: NoAction)
-  assignedTo   User?         @relation("TicketAssignee", fields: [AssignedToUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
-  responses    TicketResponse[]
-  attachments  TicketAttachment[]
-  
+  TicketId         Int                @id @default(autoincrement()) @map("TicketId")
+  TicketNumber     String             @unique @default(cuid()) @map("TicketNumber")
+  ClientId         Int?               @map("ClientId")
+  OrderId          Int?               @map("OrderId")
+  CategoryId       Int                @map("CategoryId")
+  Subject          String             @map("Subject")
+  Description      String             @map("Description") @db.Text
+  Priority         String             @default("normal") @map("Priority")
+  Status           String             @default("open") @map("Status")
+  AssignedToUserId Int?               @map("AssignedToUserId")
+  CreatedAt        DateTime           @default(now()) @map("CreatedAt")
+  UpdatedAt        DateTime           @updatedAt @map("UpdatedAt")
+  ResolvedAt       DateTime?          @map("ResolvedAt")
+  ClosedAt         DateTime?          @map("ClosedAt")
+  CreatedBy        String             @map("CreatedBy")
+  attachments      TicketAttachment[]
+  responses        TicketResponse[]
+  assignedTo       User?              @relation("TicketAssignee", fields: [AssignedToUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  category         TicketCategory     @relation(fields: [CategoryId], references: [CategoryId], onUpdate: NoAction)
+  client           Client?            @relation(fields: [ClientId], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  order            ServiceOrder?      @relation(fields: [OrderId], references: [OrderId], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([ClientId])
   @@index([OrderId])
   @@index([Status])
@@ -270,18 +243,17 @@ model Ticket {
 }
 
 model TicketResponse {
-  ResponseId   Int      @id @default(autoincrement()) @map("ResponseId")
-  TicketId     Int      @map("TicketId")
-  Message      String   @map("Message") @db.Text
-  RespondedByUserId Int? @map("RespondedByUserId")
-  RespondedByClient Int? @map("RespondedByClient")
-  IsInternal   Boolean  @default(false) @map("IsInternal") // Nota interna solo para staff
-  CreatedAt    DateTime @default(now()) @map("CreatedAt")
-  
-  ticket           Ticket  @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
-  respondedByUser  User?   @relation("TicketResponder", fields: [RespondedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
-  respondedByClient Client? @relation(fields: [RespondedByClient], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
-  
+  ResponseId        Int      @id @default(autoincrement()) @map("ResponseId")
+  TicketId          Int      @map("TicketId")
+  Message           String   @map("Message") @db.Text
+  RespondedByUserId Int?     @map("RespondedByUserId")
+  RespondedByClient Int?     @map("RespondedByClient")
+  IsInternal        Boolean  @default(false) @map("IsInternal")
+  CreatedAt         DateTime @default(now()) @map("CreatedAt")
+  respondedByClient Client?  @relation(fields: [RespondedByClient], references: [ClientId], onDelete: NoAction, onUpdate: NoAction)
+  respondedByUser   User?    @relation("TicketResponder", fields: [RespondedByUserId], references: [UserId], onDelete: NoAction, onUpdate: NoAction)
+  ticket            Ticket   @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
+
   @@index([TicketId])
   @@map("support.TicketResponses")
 }
@@ -294,24 +266,8 @@ model TicketAttachment {
   FileSize     Int      @map("FileSize")
   MimeType     String   @map("MimeType")
   UploadedAt   DateTime @default(now()) @map("UploadedAt")
-  
-  ticket Ticket @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
-  
+  ticket       Ticket   @relation(fields: [TicketId], references: [TicketId], onDelete: Cascade, onUpdate: NoAction)
+
   @@index([TicketId])
   @@map("support.TicketAttachments")
 }
-
-// === ACTUALIZAR MODELOS EXISTENTES ===
-
-// Agregar estas relaciones a los modelos existentes:
-
-// En model User:
-//   tickets          Ticket[] @relation("TicketAssignee")
-//   ticketResponses  TicketResponse[] @relation("TicketResponder")
-
-// En model Client:
-//   tickets          Ticket[]
-//   ticketResponses  TicketResponse[]
-
-// En model ServiceOrder:
-//   tickets          Ticket[]

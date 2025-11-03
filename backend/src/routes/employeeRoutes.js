@@ -229,7 +229,33 @@ router.post(
   validate(schemas.createClient),
   receptionistCreateOrUpdateClient
 );
+// ========================================
+// RUTAS AUXILIARES - RECEPCIÓN
+// ========================================
 
+/**
+ * Buscar clientes con filtros
+ */
+router.get('/search/clients', searchClients);
+
+
+/**
+ * Listar técnicos disponibles
+ */
+router.get(
+  '/technicians',
+  requireReception(), // Admin + Recepcionista
+  listTechnicians
+);
+
+/**
+ * Listar equipos de un cliente específico
+ */
+router.get(
+  '/client/:clientId/equipments',
+  requireReception(), // Admin + Recepcionista
+  listClientEquipments
+);
 /**
  * Registrar equipo nuevo
  * 

@@ -11,7 +11,8 @@ function useFetch() {
   const fetchDataBackend = useCallback(
     async (endpoint, data = null, method = "GET", showModals = true) => {
       // 🔹 Obtener token desde Zustand o fallback a localStorage
-      const token = storeAuth.getState().user?.token || localStorage.getItem("userToken");
+      const token =
+        storeAuth.getState().user?.token || localStorage.getItem("userToken");
 
       const url = endpoint.startsWith("/")
         ? `${BASE_URL}${endpoint.substring(1)}`
@@ -48,7 +49,10 @@ function useFetch() {
           await MySwal.fire({
             icon: "success",
             title: "¡Éxito!",
-            text: response?.data?.msg || response?.data?.message || "Operación completada correctamente",
+            text:
+              response?.data?.msg ||
+              response?.data?.message ||
+              "Operación completada correctamente",
             confirmButtonText: "OK",
             backdrop: true,
           });
@@ -57,6 +61,9 @@ function useFetch() {
         return response.data;
       } catch (error) {
         if (showModals) MySwal.close();
+
+        // 🔹 Mostrar detalle completo del backend
+        /*console.error("Error completo:", error.response?.data || error);*/
 
         const errorMsg =
           error?.response?.data?.msg ||
@@ -69,7 +76,7 @@ function useFetch() {
           await MySwal.fire({
             icon: "error",
             title: "Error",
-            text: errorMsg,
+            text: JSON.stringify(error.response?.data || errorMsg, null, 2), // aquí vemos todo
             confirmButtonText: "Entendido",
             backdrop: true,
           });

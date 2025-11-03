@@ -135,20 +135,19 @@ const ecuadorianIdRefinement = z.string()
 export const validate = (schema, source = 'body') => {
   return (req, res, next) => {
     try {
-      // Parsea y valida los datos
-      const parsed = schema.parse(req[source]);
-      
-      // Reemplaza los datos originales con los validados y sanitizados
+      if (!schema) return next(); // 🔹 Si no hay schema, sigue la ruta
+      const data = req[source] || {};
+      const parsed = schema.parse(data); // Solo parsea si schema existe
       req[source] = parsed;
-      
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
+        const details = Array.isArray(error.errors) ? error.errors : [];
         return res.status(400).json({
           success: false,
           error: 'Datos de entrada inválidos',
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
+          details: details.map(err => ({
+            field: err.path ? err.path.join('.') : 'unknown',
             message: err.message,
             code: err.code
           }))
@@ -158,6 +157,7 @@ export const validate = (schema, source = 'body') => {
     }
   };
 };
+
 
 // --- SCHEMAS DE VALIDACIÓN PARA EL SISTEMA ---
 

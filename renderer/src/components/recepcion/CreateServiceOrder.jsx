@@ -47,6 +47,7 @@ const CreateServiceOrder = () => {
         // Cargar técnicos (usuarios con rol técnico)
         const techRes = await fetchDataBackend("/employee/technicians", {}, "GET", false);
         if (techRes.success) {
+          console.log("Técnicos cargados:", techRes.data.technicians); 
           setTechnicians(techRes.data.technicians || []);
         }
 
@@ -88,34 +89,39 @@ const CreateServiceOrder = () => {
     loadEquipments();
   }, [selectedClientId, setValue]);
 
-  const onSubmit = async (data) => {
-    try {
-      const submitData = {
-        clientId: parseInt(data.clientId),
-        equipmentId: parseInt(data.equipmentId),
-        technicianId: data.technicianId ? parseInt(data.technicianId) : undefined,
-        notes: data.notes || "",
-        estimatedDeliveryDate: data.estimatedDeliveryDate || null,
-      };
+const onSubmit = async (data) => {
+  try {
+    const submitData = {
+      clientId: parseInt(data.clientId),
+      equipmentId: parseInt(data.equipmentId),
+      technicianId: data.technicianId ? parseInt(data.technicianId) : null,
+      notes: data.notes ? data.notes : null,
+      estimatedDeliveryDate: data.estimatedDeliveryDate
+        ? new Date(data.estimatedDeliveryDate).toISOString()
+        : null,
+    };
 
-      const res = await fetchDataBackend(
-        "/employee/receptionist/create-order",
-        submitData,
-        "POST"
-      );
+    console.log("Datos a enviar:", submitData); // <-- para depurar
 
-      if (res.success) {
-        Swal.fire("Éxito", "Orden de servicio creada correctamente", "success");
-        reset();
-        setEquipments([]); // Limpiar equipos al resetear
-      } else {
-        Swal.fire("Error", res.message || "Error al crear orden", "error");
-      }
-    } catch (error) {
-      console.error(error);
-      Swal.fire("Error", "Error de conexión con el servidor", "error");
+    const res = await fetchDataBackend(
+      "/employee/receptionist/create-order",
+      submitData,
+      "POST"
+    );
+
+    if (res.success) {
+      Swal.fire("Éxito", "Orden de servicio creada correctamente", "success");
+      reset();
+      setEquipments([]); // Limpiar equipos al resetear
+    } else {
+      Swal.fire("Error", res.message || "Error al crear orden", "error");
     }
-  };
+  } catch (error) {
+    console.error(error);
+    Swal.fire("Error", "Error de conexión con el servidor", "error");
+  }
+};
+
 
   if (loadingData) {
     return (
@@ -169,7 +175,7 @@ const CreateServiceOrder = () => {
               </option>
               {equipments.map((equipment) => (
                 <option key={equipment.EquipmentId} value={equipment.EquipmentId}>
-                  {equipment.Brand} {equipment.Model} - {equipment.SerialNumber}
+                  {equipment.Brand} {equipment.Model} - {equipment.SerialNumber} ({equipment.equipmentType?.TypeName})
                 </option>
               ))}
             </select>
@@ -201,11 +207,11 @@ const CreateServiceOrder = () => {
               type="date"
               {...register("estimatedDeliveryDate")}
               className="w-full p-2 border rounded"
-              min={new Date().toISOString().split('T')[0]} // Fecha mínima hoy
+              min={new Date().toISOString().split('T')[0]}
             />
           </div>
 
-          {/* Notas. */}
+          {/* Notas */}
           <div className="col-span-full">
             <label className="block mb-1 font-medium">Notas (opcional)</label>
             <textarea
@@ -216,7 +222,7 @@ const CreateServiceOrder = () => {
             />
           </div>
 
-          {/* Botón de envío. */}
+          {/* Botón de envío */}
           <div className="col-span-full flex justify-end">
             <button
               type="submit"
