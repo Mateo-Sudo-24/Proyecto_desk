@@ -20,6 +20,14 @@ const DashboardRecepcion = () => {
       {/* Formulario para crear órdenes de servicio. */}
       <CreateServiceOrder />
 
+      {/* Gestión de equipos */}
+      <div className="bg-white p-4 rounded-2xl shadow">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              Gestión de Equipos
+          </h2>
+          <EquipmentTable />
+      </div>
+            
       {/* Estadísticas del área de recepción */}
       <ReceptionStats />
     </div>

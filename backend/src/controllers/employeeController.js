@@ -170,6 +170,124 @@ async function updateOrderStatusAndHistory(orderId, newStatusId, notes, userId =
   });
 }
 
+// --- FUNCIONES AUXILIARES PARA RECEPCIÓN ---
+
+/**
+ * Busca clientes con filtros opcionales
+ * @route GET /api/employee/search/clients
+ */
+export const searchClients = asyncHandler(async (req, res) => {
+  const { search, clientTypeId, limit = 50 } = req.query;
+
+  const where = {};
+
+  if (search) {
+    where.OR = [
+      { DisplayName: { contains: search, mode: 'insensitive' } },
+      { IdNumber: { contains: search, mode: 'insensitive' } },
+      { Email: { contains: search, mode: 'insensitive' } },
+      { OrganizationName: { contains: search, mode: 'insensitive' } }
+    ];
+  }
+
+  if (clientTypeId) {
+    where.ClientTypeId = toNumber(clientTypeId, 'clientTypeId');
+  }
+
+  const clients = await prisma.client.findMany({
+    where,
+    select: {
+      ClientId: true,
+      DisplayName: true,
+      IdNumber: true,
+      Email: true,
+      Phone: true,
+      ClientTypeId: true,
+      OrganizationName: true,
+      ContactName: true,
+      IsPublicService: true
+    },
+    orderBy: { DisplayName: 'asc' },
+    take: parseInt(limit)
+  });
+
+  res.json({
+    success: true,
+    message: 'Clientes encontrados',
+    data: { clients, count: clients.length }
+  });
+});
+
+/**
+ * Lista técnicos disponibles
+ * @route GET /api/employee/technicians
+ */
+export const listTechnicians = asyncHandler(async (req, res) => {
+  const technicians = await prisma.user.findMany({
+    where: {
+      Active: true,
+      userRoles: {
+        some: {
+          role: {
+            Name: 'TECHNICIAN'
+          }
+        }
+      }
+    },
+    select: {
+      UserId: true,
+      Username: true,
+      Email: true,
+      FirstName: true,
+      LastName: true
+    },
+    orderBy: { Username: 'asc' }
+  });
+
+  res.json({
+    success: true,
+    message: 'Técnicos disponibles',
+    data: { technicians, count: technicians.length }
+  });
+});
+
+/**
+ * Lista equipos de un cliente específico
+ * @route GET /api/employee/client/:clientId/equipments
+ */
+export const listClientEquipments = asyncHandler(async (req, res) => {
+  const { clientId } = req.params;
+
+  const clientIdNum = toNumber(clientId, 'clientId');
+
+  const equipments = await prisma.equipment.findMany({
+    where: { ClientId: clientIdNum },
+    include: {
+      equipmentType: {
+        select: {
+          EquipmentTypeId: true,
+          TypeName: true
+        }
+      }
+    },
+    select: {
+      EquipmentId: true,
+      Brand: true,
+      Model: true,
+      SerialNumber: true,
+      Description: true,
+      CreatedAt: true
+    },
+    orderBy: { CreatedAt: 'desc' }
+  });
+
+  res.json({
+    success: true,
+    message: 'Equipos del cliente',
+    data: { equipments, count: equipments.length }
+  });
+});
+
 // --- ROL: RECEPCIONISTA ---
 
 /**

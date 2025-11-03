@@ -7,6 +7,11 @@ import {
   employeeForgotPassword,
   employeeLogout,
 
+  // Funciones auxiliares recepción
+  searchClients,
+  listTechnicians,
+  listClientEquipments,
+
   // Recepcionista
   receptionistCreateOrUpdateClient,
   receptionistRegisterEquipment,
