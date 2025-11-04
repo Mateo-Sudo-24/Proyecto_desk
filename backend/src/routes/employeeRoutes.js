@@ -23,6 +23,7 @@ import {
   techSetDiagnosis,
   techStartService,
   techEndService,
+  techDashboard,
 
   // Staff Ventas
   salesListOrders,
@@ -429,29 +430,11 @@ router.post(
  * @access  Private (Administrador, Staff Técnico)
  * @returns { success: boolean, data: object }
  */
-router.get(
-  '/technical/dashboard',
-  requireTechnical(),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Dashboard técnico',
-      data: {
-        assignedOrders: 12,
-        ordersInProgress: 5,
-        completedToday: 8,
-        completedThisWeek: 35,
-        avgRepairTime: '2.5 horas',
-        pendingDiagnosis: 3,
-        technician: {
-          id: req.auth.userId,
-          username: req.auth.username,
-          roles: req.auth.roles
-        }
-      }
-    });
-  }
-);
+
+router.get('/technical/dashboard', requireTechnical(), techDashboard);
+
+
+
 
 // ========================================
 // ROL: STAFF VENTAS

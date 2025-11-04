@@ -491,7 +491,7 @@ export const receptionistRegisterEquipmentExit = asyncHandler(async (req, res) =
  * @route GET /api/technician/orders
  */
 export const techListAssignedOrders = asyncHandler(async (req, res) => {
-  const userId = req.session.userId;
+  const userId = req.session.userId || req.user?.id; //viene del jwt middleware
 
   const orders = await prisma.serviceOrder.findMany({
     where: { TechnicianId: userId },
@@ -509,7 +509,7 @@ export const techListAssignedOrders = asyncHandler(async (req, res) => {
           equipmentType: {
             select: {
               EquipmentTypeId: true,
-              TypeName: true
+              Name: true
             }
           } 
         } 
@@ -517,7 +517,7 @@ export const techListAssignedOrders = asyncHandler(async (req, res) => {
       status: {
         select: {
           StatusId: true,
-          StatusName: true,
+          Name: true,
           Code: true
         }
       }
@@ -653,6 +653,57 @@ export const techEndService = asyncHandler(async (req, res) => {
   });
 });
 
+export const techDashboard = asyncHandler(async (req, res) => {
+  const userId = req.auth.userId;  // o req.session.userId
+  const username = req.auth.username;
+  const roles = req.auth.roles;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const startOfWeek = new Date();
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const assignedOrders = await prisma.serviceOrder.count({ where: { TechnicianId: userId } });
+  const ordersInProgress = await prisma.serviceOrder.count({
+    where: { TechnicianId: userId, CurrentStatusId: (await getStatusByCode(STATUS_CODES.IN_PROGRESS)).StatusId }
+  });
+  const completedToday = await prisma.serviceOrder.count({
+    where: { TechnicianId: userId, CurrentStatusId: (await getStatusByCode(STATUS_CODES.COMPLETED)).StatusId, ServiceEndDate: { gte: today } }
+  });
+  const completedThisWeek = await prisma.serviceOrder.count({
+    where: { TechnicianId: userId, CurrentStatusId: (await getStatusByCode(STATUS_CODES.COMPLETED)).StatusId, ServiceEndDate: { gte: startOfWeek } }
+  });
+
+  const completedOrders = await prisma.serviceOrder.findMany({
+    where: { TechnicianId: userId, CurrentStatusId: (await getStatusByCode(STATUS_CODES.COMPLETED)).StatusId, ServiceStartDate: { not: null }, ServiceEndDate: { not: null } },
+    select: { ServiceStartDate: true, ServiceEndDate: true }
+  });
+
+  const avgRepairTime = completedOrders.length
+    ? (completedOrders.reduce((sum, o) => sum + (o.ServiceEndDate - o.ServiceStartDate), 0) / completedOrders.length) / (1000*60*60)
+    : 0;
+
+  const pendingDiagnosis = await prisma.serviceOrder.count({
+    where: { TechnicianId: userId, CurrentStatusId: { lt: (await getStatusByCode(STATUS_CODES.DIAGNOSED)).StatusId } }
+  });
+
+  res.json({
+    success: true,
+    message: 'Dashboard técnico',
+    data: {
+      assignedOrders,
+      ordersInProgress,
+      completedToday,
+      completedThisWeek,
+      avgRepairTime: `${avgRepairTime.toFixed(2)} horas`,
+      pendingDiagnosis,
+      technician: { id: userId, username, roles }
+    }
+  });
+});
+
 // --- ROL: STAFF VENTAS ---
 
 /**
@@ -688,7 +739,7 @@ export const salesListOrders = asyncHandler(async (req, res) => {
           equipmentType: {
             select: {
               EquipmentTypeId: true,
-              TypeName: true
+              Name: true
             }
           } 
         } 
@@ -696,7 +747,7 @@ export const salesListOrders = asyncHandler(async (req, res) => {
       status: {
         select: {
           StatusId: true,
-          StatusName: true,
+          Name: true,
           Code: true
         }
       },
