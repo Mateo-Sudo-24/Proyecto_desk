@@ -54,6 +54,34 @@ const baseStyle = `
   </style>
 `;
 
+// --- MAPA DE ESTADOS ---
+const STATUS_MAP = {
+  'open': { 
+    label: 'Abierto', 
+    class: 'status-open',
+    description: 'Su ticket ha sido creado y está esperando asignación.'
+  },
+  'assigned': { 
+    label: 'Asignado', 
+    class: 'status-assigned',
+    description: 'Su ticket ha sido asignado a un especialista.'
+  },
+  'in_progress': { 
+    label: 'En Progreso', 
+    class: 'status-in_progress',
+    description: 'Nuestro equipo está trabajando en su solicitud.'
+  },
+  'resolved': { 
+    label: 'Resuelto', 
+    class: 'status-resolved',
+    description: 'Su ticket ha sido resuelto satisfactoriamente.'
+  },
+  'closed': { 
+    label: 'Cerrado', 
+    class: 'status-closed',
+    description: 'Su ticket ha sido cerrado.'
+  }
+};
 
 // --- PLANTILLAS DE CORREO ---
 
@@ -309,6 +337,204 @@ const sendPasswordResetEmail = async (userMail, userName, resetToken) => {
   }
 };
 
+// --- FUNCIONES DE CORREO ---
+
+/**
+ * Envía correo de actualización de estado de ticket
+ */
+const sendTicketUpdateEmail = async (clientEmail, clientName, ticketNumber, newStatus, additionalNotes = '') => {
+  const statusInfo = STATUS_MAP[newStatus] || { 
+    label: newStatus, 
+    class: 'status-open',
+    description: 'El estado de su ticket ha sido actualizado.'
+  };
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: clientEmail,
+    subject: `Ecuatechnology - Actualización de Ticket #${ticketNumber}`,
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Actualización de Ticket de Soporte</h2>
+        <p>Estimado/a <b>${clientName}</b>,</p>
+        <p>El estado de su ticket <b>#${ticketNumber}</b> ha sido actualizado:</p>
+        
+        <div class="text-center">
+          <span class="status-badge ${statusInfo.class}">${statusInfo.label}</span>
+        </div>
+        
+        <p>${statusInfo.description}</p>
+        
+        ${additionalNotes ? `
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 0; font-style: italic;">"${additionalNotes}"</p>
+          </div>
+        ` : ''}
+        
+        <p>Puede ver los detalles de su ticket iniciando sesión en nuestro portal de clientes.</p>
+        
+        <div class="button-container">
+          <a href="${process.env.CLIENT_APP_URL}/tickets" class="button">Ver Mis Tickets</a>
+        </div>
+        
+        <p>Si tiene alguna pregunta adicional, no dude en responder a este correo.</p>
+        
+        <hr>
+        <footer>
+          © ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.<br>
+          <small>Este es un correo automático, por favor no responda directamente.</small>
+        </footer>
+      </div></body></html>`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo de actualización de ticket enviado a: ${clientEmail}`, {
+      ticketNumber,
+      newStatus,
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  } catch (error) {
+    console.error("Error al enviar correo de actualización de ticket:", {
+      clientEmail,
+      ticketNumber,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+    return false;
+  }
+};
+
+/**
+ * Envía correo de asignación de ticket a staff
+ */
+const sendTicketAssignmentEmail = async (staffEmail, staffName, ticketNumber, clientName, priority = 'normal') => {
+  const priorityMap = {
+    'low': 'Baja',
+    'normal': 'Normal', 
+    'high': 'Alta',
+    'urgent': 'Urgente'
+  };
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Sistema de Tickets <no-reply@ecuatechnology.com>',
+    to: staffEmail,
+    subject: `Nuevo Ticket Asignado - #${ticketNumber}`,
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Nuevo Ticket Asignado</h2>
+        <p>Hola <b>${staffName}</b>,</p>
+        <p>Se te ha asignado un nuevo ticket de soporte:</p>
+        
+        <table class="details-table">
+          <tr>
+            <th>Número de Ticket</th>
+            <td>#${ticketNumber}</td>
+          </tr>
+          <tr>
+            <th>Cliente</th>
+            <td>${clientName}</td>
+          </tr>
+          <tr>
+            <th>Prioridad</th>
+            <td>${priorityMap[priority] || priority}</td>
+          </tr>
+          <tr>
+            <th>Fecha de Asignación</th>
+            <td>${new Date().toLocaleDateString('es-ES')}</td>
+          </tr>
+        </table>
+        
+        <div class="button-container">
+          <a href="${process.env.STAFF_APP_URL}/tickets/${ticketNumber}" class="button">Ver Ticket</a>
+        </div>
+        
+        <p>Por favor, revisa el ticket y actualiza su estado según corresponda.</p>
+        
+        <hr>
+        <footer>
+          © ${new Date().getFullYear()} Ecuatechnology - Sistema de Tickets<br>
+          <small>Notificación automática del sistema</small>
+        </footer>
+      </div></body></html>`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo de asignación de ticket enviado a: ${staffEmail}`, {
+      ticketNumber,
+      staffName,
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  } catch (error) {
+    console.error("Error al enviar correo de asignación de ticket:", {
+      staffEmail,
+      ticketNumber,
+      error: error.message
+    });
+    return false;
+  }
+};
+
+/**
+ * Envía correo de nuevo mensaje en ticket
+ */
+const sendNewTicketMessageEmail = async (recipientEmail, recipientName, ticketNumber, senderName, message, isInternal = false) => {
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || 'Soporte Ecuatechnology <no-reply@ecuatechnology.com>',
+    to: recipientEmail,
+    subject: `Nuevo mensaje en Ticket #${ticketNumber}`,
+    html: `
+      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">${baseStyle}</head><body>
+      <div class="container">
+        <h2>Nuevo Mensaje en Ticket</h2>
+        <p>Hola <b>${recipientName}</b>,</p>
+        <p>Hay un nuevo mensaje en el ticket <b>#${ticketNumber}</b>:</p>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid ${COLORS.primary};">
+          <p style="margin: 0 0 10px 0;"><strong>De:</strong> ${senderName}</p>
+          <p style="margin: 0; white-space: pre-wrap;">${message}</p>
+        </div>
+        
+        ${isInternal ? `
+          <div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; margin: 15px 0;">
+            <small><strong>Nota:</strong> Este es un mensaje interno del equipo.</small>
+          </div>
+        ` : ''}
+        
+        <div class="button-container">
+          <a href="${process.env.CLIENT_APP_URL}/tickets/${ticketNumber}" class="button">Responder al Ticket</a>
+        </div>
+        
+        <hr>
+        <footer>
+          © ${new Date().getFullYear()} Ecuatechnology. Todos los derechos reservados.
+        </footer>
+      </div></body></html>`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo de nuevo mensaje enviado a: ${recipientEmail}`, {
+      ticketNumber,
+      senderName,
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  } catch (error) {
+    console.error("Error al enviar correo de nuevo mensaje:", {
+      recipientEmail,
+      ticketNumber,
+      error: error.message
+    });
+    return false;
+  }
+};
+
 // Agregar al export
 export {
   sendMailToReceptionist,
@@ -317,6 +543,9 @@ export {
   sendForgotPasswordRequest,
   sendProformaEmail,
   sendProformaConfirmationEmail,
-  sendVerificationEmail,      // Nueva función
-  sendPasswordResetEmail      // Nueva función
+  sendVerificationEmail,      
+  sendPasswordResetEmail,
+  sendTicketUpdateEmail,           
+  sendTicketAssignmentEmail,       
+  sendNewTicketMessageEmail        
 };

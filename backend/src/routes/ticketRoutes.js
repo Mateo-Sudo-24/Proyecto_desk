@@ -4,11 +4,11 @@ import {
   authenticateHybrid, 
   requireRoles 
 } from '../middlewares/authMiddleware.js';
-import { validate, schemas, sanitizeRequest } from '../middleware/validationMiddleware.js';
+import { validate, schemas, sanitizeRequest } from '../middlewares/validator.js';
 
 // Controladores
 import * as clientTicketController from '../controllers/clientController.js';
-import * as adminTicketController from '../controllers/adminTicketController.js';
+import * as adminTicketController from '../controllers/adminTicketsController.js';
 
 const router = express.Router();
 

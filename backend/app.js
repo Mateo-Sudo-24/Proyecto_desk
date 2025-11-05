@@ -1,4 +1,3 @@
-// app.js (VERSIÓN REFACTORIZADA CON VALIDACIÓN Y SEGURIDAD MEJORADA)
 import express from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
@@ -14,8 +13,9 @@ import adminRoutes from './src/routes/adminRoutes.js';
 import employeeRoutes from './src/routes/employeeRoutes.js';
 import clientRoutes from './src/routes/clientRoutes.js';
 import orderRoutes from './src/routes/orderRoutes.js';
+import ticketRoutes from './src/routes/ticketRoutes.js'; 
 import { authenticateHybrid } from './src/middlewares/authMiddleware.js';
-import { sanitizeRequest } from './src/middlewares/validator.js'; // NUEVO
+import { sanitizeRequest } from './src/middlewares/validator.js';
 
 dotenv.config();
 const app = express();
@@ -87,7 +87,7 @@ app.use(express.json({ limit: '10mb' })); // Límite de tamaño de payload
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // --- Sanitización Global (Protección XSS) ---
-app.use(sanitizeRequest); // ✅ NUEVO - Limpia todos los inputs automáticamente
+app.use(sanitizeRequest); // ✅ Limpia todos los inputs automáticamente
 
 // --- Logging ---
 app.use(httpLogger);
@@ -102,7 +102,7 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production', // HTTPS en producción
     httpOnly: true, // Prevenir acceso desde JavaScript
     maxAge: 24 * 60 * 60 * 1000, // 24 horas
-    sameSite: 'strict' // ✅ NUEVO - Protección CSRF
+    sameSite: 'strict' // Protección CSRF
   }
 }));
 
@@ -118,7 +118,7 @@ app.get('/health', (req, res) => {
 // --- Rutas de Autenticación (Públicas) ---
 // Aplicar rate limiting solo a rutas de autenticación
 app.use('/api/auth', authLimiter, employeeAuthRoutes);      // Empleados/Admins (JWT)
-app.use('/api/client-auth', /*authLimiter,*/ clientAuthRoutes); // Clientes (Session)
+app.use('/api/client-auth', authLimiter, clientAuthRoutes); // ✅ ACTUALIZADO - Clientes (Session)
 
 // --- Rutas Protegidas ---
 // Rate limiting general para todas las rutas protegidas
@@ -126,6 +126,7 @@ app.use('/api/admin', generalLimiter, authenticateHybrid, adminRoutes);
 app.use('/api/employee', generalLimiter, authenticateHybrid, employeeRoutes);
 app.use('/api/client', generalLimiter, authenticateHybrid, clientRoutes);
 app.use('/api/orders', generalLimiter, authenticateHybrid, orderRoutes);
+app.use('/api/tickets', generalLimiter, authenticateHybrid, ticketRoutes); // ✅ NUEVO - Rutas de tickets
 
 // --- Ruta 404 (Not Found) ---
 app.use((req, res) => {
