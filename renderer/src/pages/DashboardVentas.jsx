@@ -2,6 +2,9 @@ import React from "react";
 import SalesOrdersList from "../components/ventas/SalesOrdersList";
 import SalesProformaForm from "../components/ventas/SalesProformaForm";
 import SalesSendProforma from "../components/ventas/SalesSendProforma";
+import SalesReports from "../components/ventas/SalesReports";
+import InvoiceDownload from "../components/ventas/InvoiceDownload";
+import SalesDashboard from "../components/ventas/SalesDashboard";
 
 const DashboardVentas = () => {
   return (
@@ -10,6 +13,7 @@ const DashboardVentas = () => {
         <SalesOrdersList />
       </div>
       <SalesProformaForm />
+      <InvoiceDownload />
       <SalesSendProforma />
     </div>
   );
